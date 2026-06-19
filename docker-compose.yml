@@ -1,0 +1,12 @@
+services:
+  arquivo-tormenta:
+    build: .
+    container_name: arquivo-tormenta-rpg
+    ports:
+      - "3333:3333"
+    volumes:
+      - ./data:/app/data
+      - ./.git:/app/.git
+    environment:
+      - NODE_ENV=production
+      - PORT=3333
