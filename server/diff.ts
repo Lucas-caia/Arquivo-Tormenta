@@ -1,4 +1,4 @@
-import type { Diferenca } from "./types.js";
+import type { Diferenca } from "../shared/types.js";
 
 const ignored = new Set([
   "status",

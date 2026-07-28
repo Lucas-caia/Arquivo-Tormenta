@@ -1,23 +1,16 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "lib": [
-      "ES2022"
-    ],
+    "lib": ["ES2022"],
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "outDir": "dist-server",
-    "rootDir": "server",
-    "types": [
-      "node",
-      "express",
-      "multer"
-    ]
+    "rootDir": ".",
+    "types": ["node", "express", "multer"]
   },
-  "include": [
-    "server/**/*.ts"
-  ]
+  "include": ["server/**/*.ts", "shared/**/*.ts"],
+  "exclude": ["server/**/*.test.ts"]
 }

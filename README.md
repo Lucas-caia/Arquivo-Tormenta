@@ -1,191 +1,147 @@
 # Arquivo Tormenta RPG
 
-Sistema local para importar fichas de personagens de Tormenta em PDF, extrair os campos relevantes, salvar cada personagem como JSON e controlar revisões antes de atualizar uma ficha existente.
+O **Arquivo Tormenta RPG** organiza fichas de personagens a partir de PDFs preenchíveis, mantendo os dados em JSON e protegendo cada atualização com um fluxo de revisão.
 
-## O que o projeto faz
+O objetivo é simples: oferecer um lugar rápido, confiável e fácil de manter para armazenar fichas, acompanhar pendências e consultar alterações anteriores.
 
-- Recebe uma ficha PDF pelo navegador.
-- Lê os campos preenchidos do modelo de ficha enviado.
-- Usa o nome do personagem como identificador principal.
-- Salva somente o JSON da ficha em `data/fichas`.
-- Não salva o PDF bruto em nenhuma pasta do projeto.
-- Detecta quando uma ficha já existe.
-- Compara a versão atual com a versão enviada.
-- Mostra as alterações antes da atualização.
-- Permite manter a ficha em revisão ou aprovar e atualizar.
-- Lista fichas em tabela com busca, filtros e status.
-- Executa pull e push do GitHub pela interface.
+## Como funciona
 
-## Stack
+1. Uma ficha em PDF é enviada pela interface.
+2. O sistema valida o arquivo e extrai seus campos.
+3. Fichas novas são adicionadas ao acervo como pendentes de aprovação.
+4. Quando uma ficha já existe, uma revisão é criada com as diferenças encontradas.
+5. A versão oficial só é alterada depois que a revisão é aprovada.
+6. Os arquivos podem ser sincronizados com o repositório por Git.
 
-- React
-- Vite
-- TypeScript
-- Express
-- pdf-lib
-- Docker
-- Git CLI
+O PDF é processado em memória e descartado. Apenas os dados extraídos são armazenados.
 
-## Estrutura principal
+## Principais recursos
 
-```txt
-arquivo-tormenta-rpg/
-  src/
-  server/
-  data/
-    fichas/
-    revisoes/
-  Dockerfile
-  docker-compose.yml
-  README.md
+- Importação de fichas por PDF.
+- Busca e filtros no acervo.
+- Visualização completa dos dados extraídos.
+- Comparação entre a ficha atual e uma nova versão.
+- Aprovação ou descarte de revisões pendentes.
+- Aprovação individual ou em massa de fichas novas.
+- Exportação consolidada em JSON.
+- Integração com Git para pull, status e push.
+- Tema claro, escuro ou automático.
+- Texto ampliado, alto contraste e redução de movimento.
+
+## Uso privado
+
+O projeto foi pensado para uso pessoal ou por um pequeno grupo de pessoas de confiança. Por isso, a versão atual não possui login, cadastro, sessões ou perfis de usuário.
+
+O acesso é controlado pelo ambiente onde a aplicação está instalada. Já a permissão para enviar alterações ao repositório depende das credenciais configuradas no Git.
+
+Essa decisão pode ser revista no futuro, mas autenticação não faz parte do escopo atual.
+
+## Arquitetura
+
+O projeto utiliza um **monólito modular full stack**:
+
+```text
+React
+  │
+  ▼
+API Express
+  ├── fichas
+  ├── revisões
+  ├── importação
+  ├── Git
+  └── armazenamento
+          │
+          ▼
+      arquivos JSON
 ```
 
-## Armazenamento dos dados
+Os tipos compartilhados entre frontend e backend ficam em `shared/types.ts`. A organização técnica mais detalhada está em [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
-As fichas ficam em:
+## Estrutura do projeto
 
-```txt
-data/fichas
+```text
+shared/          Tipos usados pelo frontend e backend
+src/             Interface React
+server/          API, parser, validações e armazenamento
+data/fichas/     Fichas oficiais
+data/revisoes/   Atualizações pendentes
+docs/            Documentação técnica
 ```
 
-Cada personagem vira um arquivo JSON. Exemplo:
-
-```txt
-data/fichas/blek.json
-```
-
-As revisões pendentes ficam em:
-
-```txt
-data/revisoes
-```
-
-Essas pastas podem ser versionadas no GitHub. Assim, quando outra pessoa fizer pull do repositório, receberá as fichas salvas.
-
-## Identificação de ficha existente
-
-O sistema identifica uma ficha existente pelo campo `Nome` do PDF.
-
-Exemplo:
-
-```txt
-Nome: Blek
-Arquivo salvo: data/fichas/blek.json
-```
-
-Se outro PDF também tiver `Nome: Blek`, o sistema entende que é uma nova versão da mesma ficha e abre a comparação antes de atualizar.
-
-## Status disponíveis
-
-```txt
-aprovado
-em-revisao
-```
-
-Toda ficha nova entra como `em-revisao`.
-
-## Rodando com Docker
+## Executando com Docker
 
 ```bash
 docker compose up --build
 ```
 
-Depois acesse:
+A aplicação ficará disponível em:
 
-```txt
+```text
 http://localhost:3333
 ```
 
-## Rodando localmente sem Docker
+Por padrão, o Docker Compose publica a aplicação apenas no computador local.
+
+## Executando localmente
+
+Requer Node.js 22.
 
 ```bash
 npm install
 npm run dev
 ```
 
-Frontend:
+Durante o desenvolvimento:
 
-```txt
-http://localhost:5173
+```text
+Frontend: http://localhost:5173
+Backend:  http://localhost:3333
 ```
 
-Backend:
-
-```txt
-http://localhost:3333
-```
-
-## Build de produção
+## Verificações do projeto
 
 ```bash
-npm install
+npm run typecheck
+npm test
+npm run check
 npm run build
-npm start
 ```
 
-## GitHub pela interface
+Antes de enviar alterações, execute pelo menos `npm run check` e confirme que a importação de uma ficha de referência continua funcionando.
 
-O botão `Puxar` executa:
+## Cuidados com as fichas
 
-```bash
-git pull --ff-only
+A importação é a parte principal do projeto. Alterações no parser devem preservar os nomes e o comportamento dos campos já suportados.
+
+O sistema rejeita arquivos vazios, muito grandes, corrompidos, protegidos ou sem campos preenchíveis. Também impede que uma revisão pendente seja substituída silenciosamente e bloqueia a aplicação de revisões desatualizadas.
+
+Quando um arquivo não puder ser processado, a ficha oficial permanece inalterada.
+
+## Armazenamento e histórico
+
+As fichas atuais são armazenadas em:
+
+```text
+data/fichas/<id>.json
 ```
 
-O botão `Enviar` executa:
+As atualizações que aguardam decisão ficam em:
 
-```bash
-git add data/fichas data/revisoes
-git commit -m "Atualiza fichas RPG - data e hora"
-git push
+```text
+data/revisoes/<id>.json
 ```
 
-Para funcionar dentro do Docker, o `docker-compose.yml` monta a pasta `.git` no container.
+No estágio atual, o Git complementa o histórico e a sincronização dos dados. A evolução planejada é manter versões imutáveis dentro da própria aplicação, permitindo consultar e restaurar alterações sem depender diretamente do histórico do repositório.
 
-## Modelo de PDF suportado
+## Estado atual e próximos passos
 
-O parser foi feito para o modelo de ficha de Tormenta enviado como referência, com campos de formulário preenchíveis.
+A base atual atende bem a um acervo pequeno e privado. Para acompanhar o crescimento futuro, as próximas evoluções mais importantes são:
 
-O projeto funciona melhor quando o PDF possui campos internos como:
+- histórico completo de versões e decisões;
+- identificadores estáveis para as fichas;
+- paginação e busca no servidor;
+- migração gradual do armazenamento operacional para SQLite;
+- testes de integração e importação;
+- medições com acervos de 1.000, 5.000 e 10.000 fichas.
 
-- Nome
-- Jogador
-- Raca
-- Origem
-- Classe
-- modFor
-- modDes
-- vidaMax
-- manaMax
-- ataque1
-- item1
-- Historico
-- Magias
-
-PDF escaneado como imagem não é o foco desta versão.
-
-## Exemplo incluído
-
-O projeto já vem com a ficha `Blek` em `data/fichas/blek.json`, extraída do PDF de referência enviado.
-
-## Observações importantes
-
-- O PDF enviado é processado em memória e descartado.
-- O sistema não cria cópia do PDF bruto.
-- O JSON é a fonte principal dos dados.
-- O identificador da ficha é derivado do nome do personagem.
-- Caso dois personagens tenham exatamente o mesmo nome, o sistema tratará como a mesma ficha.
-
-## Endpoints principais
-
-```txt
-GET    /api/fichas
-GET    /api/fichas/:id
-POST   /api/fichas/upload
-POST   /api/fichas/:id/status
-GET    /api/revisoes/:id
-POST   /api/revisoes/:id/aplicar
-GET    /api/git/status
-POST   /api/git/pull
-POST   /api/git/push
-GET    /api/export
-```
+A prioridade do projeto continuará sendo a mesma: **armazenar fichas com velocidade, segurança e clareza**.

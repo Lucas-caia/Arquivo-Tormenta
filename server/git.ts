@@ -2,6 +2,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 
 const exec = promisify(execFile);
+const managedPaths = ["data/fichas", "data/revisoes"];
 
 async function runGit(args: string[]) {
   const result = await exec("git", args, {
@@ -14,6 +15,17 @@ async function runGit(args: string[]) {
 async function statusFiles() {
   const output = await runGit(["status", "--porcelain"]);
   return output.split("\n").map((line) => line.trim()).filter(Boolean);
+}
+
+async function hasStagedChanges() {
+  try {
+    await runGit(["diff", "--cached", "--quiet", "--", ...managedPaths]);
+    return false;
+  } catch (error) {
+    const exitCode = (error as { code?: number }).code;
+    if (exitCode === 1) return true;
+    throw error;
+  }
 }
 
 export async function getGitStatus() {
@@ -59,16 +71,16 @@ export async function pullRepository() {
 
 export async function pushRepository() {
   try {
-    await runGit(["add", "data/fichas", "data/revisoes"]);
-    const alterados = await statusFiles();
-    if (!alterados.length) {
+    await runGit(["add", "--", ...managedPaths]);
+    if (!(await hasStagedChanges())) {
       return {
         sucesso: true,
-        mensagem: "Não há alterações para enviar.",
-        detalhes: "Árvore de trabalho sem mudanças em data/fichas e data/revisoes.",
+        mensagem: "Não há alterações de fichas para enviar.",
+        detalhes: "Nenhuma mudança preparada em data/fichas ou data/revisoes.",
         status: await getGitStatus()
       };
     }
+
     const stamp = new Intl.DateTimeFormat("pt-BR", {
       dateStyle: "short",
       timeStyle: "short"
