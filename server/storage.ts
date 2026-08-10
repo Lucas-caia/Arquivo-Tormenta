@@ -1,24 +1,78 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import type { Ficha, FichaResumo, Revisao, StatusFicha } from "./types.js";
+import { randomUUID } from "node:crypto";
+import type { Estatisticas, Ficha, FichaResumo, Revisao, StatusFicha } from "../shared/types.js";
+import { AppError, conflict, notFound } from "./errors.js";
 import { formatDateTime, nowIso } from "./utils.js";
+import { assertValidFichaId } from "./validation.js";
 
 const root = process.cwd();
 const dataDir = path.join(root, "data");
 const fichasDir = path.join(dataDir, "fichas");
 const revisoesDir = path.join(dataDir, "revisoes");
+const locksDir = path.join(dataDir, ".locks");
 
-async function ensure() {
-  await fs.mkdir(fichasDir, { recursive: true });
-  await fs.mkdir(revisoesDir, { recursive: true });
+async function ensureDirectories() {
+  await Promise.all([
+    fs.mkdir(fichasDir, { recursive: true }),
+    fs.mkdir(revisoesDir, { recursive: true }),
+    fs.mkdir(locksDir, { recursive: true })
+  ]);
 }
 
 function fichaPath(id: string) {
-  return path.join(fichasDir, `${id}.json`);
+  return path.join(fichasDir, `${assertValidFichaId(id)}.json`);
 }
 
 function revisaoPath(id: string) {
-  return path.join(revisoesDir, `${id}.json`);
+  return path.join(revisoesDir, `${assertValidFichaId(id)}.json`);
+}
+
+const LOCK_TIMEOUT_MS = 5_000;
+const STALE_LOCK_MS = 30_000;
+const LOCK_RETRY_MS = 75;
+
+function sleep(milliseconds: number) {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+export async function withFichaLock<T>(id: string, operation: () => Promise<T>) {
+  await ensureDirectories();
+  const safeId = assertValidFichaId(id);
+  const lockPath = path.join(locksDir, `${safeId}.lock`);
+  const deadline = Date.now() + LOCK_TIMEOUT_MS;
+
+  while (true) {
+    try {
+      const handle = await fs.open(lockPath, "wx");
+      try {
+        await handle.writeFile(`${process.pid}:${nowIso()}\n`, "utf8");
+        return await operation();
+      } finally {
+        await handle.close().catch(() => undefined);
+        await fs.rm(lockPath, { force: true }).catch(() => undefined);
+      }
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code !== "EEXIST") throw error;
+
+      const stats = await fs.stat(lockPath).catch(() => null);
+      if (stats && Date.now() - stats.mtimeMs > STALE_LOCK_MS) {
+        await fs.rm(lockPath, { force: true }).catch(() => undefined);
+        continue;
+      }
+
+      if (Date.now() >= deadline) {
+        throw conflict(
+          "FICHA_BUSY",
+          "Esta ficha está sendo processada por outra operação.",
+          ["Aguarde alguns segundos e tente novamente."]
+        );
+      }
+
+      await sleep(LOCK_RETRY_MS);
+    }
+  }
 }
 
 async function exists(filePath: string) {
@@ -31,39 +85,99 @@ async function exists(filePath: string) {
 }
 
 async function readJson<T>(filePath: string) {
-  const content = await fs.readFile(filePath, "utf8");
-  return JSON.parse(content) as T;
+  try {
+    const content = await fs.readFile(filePath, "utf8");
+    return JSON.parse(content) as T;
+  } catch (error) {
+    if (error instanceof SyntaxError) {
+      throw new AppError(
+        500,
+        "CORRUPTED_JSON",
+        "Um arquivo JSON armazenado está corrompido.",
+        [path.relative(root, filePath)]
+      );
+    }
+    throw error;
+  }
 }
 
-async function writeJson(filePath: string, value: unknown) {
-  await fs.writeFile(filePath, `${JSON.stringify(value, null, 2)}\n`, "utf8");
+async function writeJsonAtomic(filePath: string, value: unknown) {
+  const temporaryPath = `${filePath}.${process.pid}.${randomUUID()}.tmp`;
+  const content = `${JSON.stringify(value, null, 2)}\n`;
+  try {
+    await fs.writeFile(temporaryPath, content, { encoding: "utf8", flag: "wx" });
+    await fs.rename(temporaryPath, filePath);
+  } catch (error) {
+    await fs.rm(temporaryPath, { force: true }).catch(() => undefined);
+    throw error;
+  }
 }
 
-export async function listFichaIds() {
-  await ensure();
-  const files = await fs.readdir(fichasDir);
-  return files.filter((file) => file.endsWith(".json")).map((file) => file.replace(/\.json$/, ""));
+async function listJsonIds(directory: string) {
+  await ensureDirectories();
+  const files = await fs.readdir(directory);
+  return files
+    .filter((file) => file.endsWith(".json"))
+    .map((file) => file.replace(/\.json$/, ""))
+    .filter((id) => {
+      try {
+        assertValidFichaId(id);
+        return true;
+      } catch {
+        return false;
+      }
+    });
+}
+
+export function summarizeFichas(fichas: FichaResumo[]): Estatisticas {
+  const latestTimestamp = fichas.reduce(
+    (latest, ficha) => Math.max(latest, new Date(ficha.atualizadoEm).getTime() || 0),
+    0
+  );
+
+  return {
+    total: fichas.length,
+    aprovadas: fichas.filter((ficha) => ficha.status === "aprovado").length,
+    emRevisao: fichas.filter((ficha) => ficha.status === "em-revisao" && !ficha.temRevisao).length,
+    revisoesPendentes: fichas.filter((ficha) => ficha.temRevisao).length,
+    ultimaAtualizacao: latestTimestamp
+      ? formatDateTime(new Date(latestTimestamp).toISOString())
+      : "Sem registros"
+  };
+}
+
+export function listFichaIds() {
+  return listJsonIds(fichasDir);
+}
+
+export function listRevisaoIds() {
+  return listJsonIds(revisoesDir);
 }
 
 export async function readFicha(id: string) {
-  await ensure();
+  await ensureDirectories();
   const file = fichaPath(id);
   if (!(await exists(file))) return null;
   return readJson<Ficha>(file);
 }
 
 export async function saveFicha(ficha: Ficha) {
-  await ensure();
-  await writeJson(fichaPath(ficha.id), ficha);
+  await ensureDirectories();
+  await writeJsonAtomic(fichaPath(ficha.id), ficha);
   return ficha;
 }
 
-export async function listFichas() {
+export async function listStoredFichas() {
   const ids = await listFichaIds();
   const fichas = await Promise.all(ids.map((id) => readFicha(id)));
-  const revisoes = new Set(await listRevisaoIds());
+  return fichas.filter((ficha): ficha is Ficha => Boolean(ficha));
+}
+
+export async function listFichas() {
+  const [fichas, revisaoIds] = await Promise.all([listStoredFichas(), listRevisaoIds()]);
+  const revisoes = new Set(revisaoIds);
+
   return fichas
-    .filter((ficha): ficha is Ficha => Boolean(ficha))
     .map((ficha): FichaResumo => ({
       id: ficha.id,
       nome: ficha.nome,
@@ -81,39 +195,61 @@ export async function listFichas() {
 
 export async function saveNewFicha(ficha: Ficha) {
   const data = nowIso();
-  ficha.status = "em-revisao";
-  ficha.atualizadoEm = data;
-  ficha.historico.criadoEm = data;
-  ficha.historico.atualizadoEm = data;
-  ficha.historico.versao = 1;
-  return saveFicha(ficha);
+  const normalized: Ficha = {
+    ...ficha,
+    status: "em-revisao",
+    atualizadoEm: data,
+    temRevisao: false,
+    historico: {
+      criadoEm: data,
+      atualizadoEm: data,
+      versao: 1
+    }
+  };
+  return saveFicha(normalized);
 }
 
 export async function updateFichaStatus(id: string, status: StatusFicha) {
   const ficha = await readFicha(id);
-  if (!ficha) throw new Error("Ficha não encontrada.");
+  if (!ficha) throw notFound("FICHA_NOT_FOUND", "Ficha não encontrada.");
+
+  if (status === "aprovado" && await readRevision(id)) {
+    throw conflict(
+      "PENDING_REVISION",
+      "Esta ficha possui uma atualização pendente.",
+      ["Compare e aplique a revisão antes de aprovar a ficha oficial."]
+    );
+  }
+
   const data = nowIso();
-  ficha.status = status;
-  ficha.atualizadoEm = data;
-  ficha.historico.atualizadoEm = data;
-  await saveFicha(ficha);
-  return ficha;
+  const updated: Ficha = {
+    ...ficha,
+    status,
+    atualizadoEm: data,
+    historico: {
+      ...ficha.historico,
+      atualizadoEm: data
+    }
+  };
+  return saveFicha(updated);
 }
 
 export async function saveRevision(revisao: Revisao) {
-  await ensure();
-  await writeJson(revisaoPath(revisao.id), revisao);
+  await ensureDirectories();
+  const file = revisaoPath(revisao.id);
+  if (await exists(file)) {
+    throw conflict(
+      "REVISION_ALREADY_PENDING",
+      `A ficha ${revisao.nome} já possui uma revisão pendente.`,
+      ["Resolva a revisão atual antes de enviar outra versão do mesmo personagem."]
+    );
+  }
+  await writeJsonAtomic(file, revisao);
   return revisao;
 }
 
-export async function listRevisaoIds() {
-  await ensure();
-  const files = await fs.readdir(revisoesDir);
-  return files.filter((file) => file.endsWith(".json")).map((file) => file.replace(/\.json$/, ""));
-}
-
 export async function readRevision(id: string) {
-  await ensure();
+  await ensureDirectories();
   const file = revisaoPath(id);
   if (!(await exists(file))) return null;
   return readJson<Revisao>(file);
@@ -126,21 +262,34 @@ export async function deleteRevision(id: string) {
 
 export async function applyRevision(id: string, status: StatusFicha) {
   const revisao = await readRevision(id);
-  if (!revisao) throw new Error("Revisão não encontrada.");
+  if (!revisao) throw notFound("REVISION_NOT_FOUND", "Revisão não encontrada.");
+
   const atual = await readFicha(revisao.fichaId);
+  if (!atual) {
+    throw notFound("FICHA_NOT_FOUND", "A ficha original desta revisão não existe mais.");
+  }
+
+  if (atual.historico.versao !== revisao.atual.historico.versao) {
+    throw conflict(
+      "STALE_REVISION",
+      "A ficha oficial mudou depois que esta revisão foi criada.",
+      ["Descarte a revisão pendente e envie novamente o PDF para gerar uma comparação atualizada."]
+    );
+  }
+
   const data = nowIso();
-  const version = (atual?.historico.versao || 1) + 1;
   const ficha: Ficha = {
     ...revisao.nova,
     status,
     atualizadoEm: data,
     temRevisao: false,
     historico: {
-      criadoEm: atual?.historico.criadoEm || revisao.nova.historico.criadoEm,
+      criadoEm: atual.historico.criadoEm,
       atualizadoEm: data,
-      versao: version
+      versao: atual.historico.versao + 1
     }
   };
+
   await saveFicha(ficha);
   await deleteRevision(id);
   return ficha;
@@ -149,23 +298,14 @@ export async function applyRevision(id: string, status: StatusFicha) {
 export async function approveAllReview() {
   const ids = await listFichaIds();
   let total = 0;
+
   for (const id of ids) {
-    const ficha = await readFicha(id);
-    if (ficha?.status === "em-revisao") {
+    const [ficha, revisao] = await Promise.all([readFicha(id), readRevision(id)]);
+    if (ficha?.status === "em-revisao" && !revisao) {
       await updateFichaStatus(id, "aprovado");
       total += 1;
     }
   }
-  return total;
-}
 
-export async function stats() {
-  const fichas = await listFichas();
-  const ultima = fichas.reduce((latest, ficha) => Math.max(latest, new Date(ficha.atualizadoEm).getTime() || 0), 0);
-  return {
-    total: fichas.length,
-    aprovadas: fichas.filter((ficha) => ficha.status === "aprovado").length,
-    emRevisao: fichas.filter((ficha) => ficha.status === "em-revisao").length,
-    ultimaAtualizacao: ultima ? formatDateTime(new Date(ultima).toISOString()) : "Sem registros"
-  };
+  return total;
 }

@@ -4,3 +4,11 @@ dist-server
 .env
 .DS_Store
 npm-debug.log
+
+data/.locks/
+
+data/quarantine/*
+!data/quarantine/.gitkeep
+data/submissions/*
+!data/submissions/.gitkeep
+data/.submission-locks/

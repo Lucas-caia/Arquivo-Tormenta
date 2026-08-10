@@ -2,11 +2,25 @@ services:
   arquivo-tormenta:
     build: .
     container_name: arquivo-tormenta-rpg
+    init: true
     ports:
-      - "3333:3333"
+      - "127.0.0.1:3333:3333"
     volumes:
       - ./data:/app/data
       - ./.git:/app/.git
     environment:
-      - NODE_ENV=production
-      - PORT=3333
+      NODE_ENV: production
+      PORT: 3333
+
+  clamav:
+    image: clamav/clamav:1.5_base
+    container_name: arquivo-tormenta-clamav
+    init: true
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3310:3310"
+    volumes:
+      - clamav-db:/var/lib/clamav
+
+volumes:
+  clamav-db:

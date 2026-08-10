@@ -10,7 +10,7 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "outDir": "dist-server",
-    "rootDir": "server",
+    "rootDir": ".",
     "types": [
       "node",
       "express",
@@ -18,6 +18,11 @@
     ]
   },
   "include": [
-    "server/**/*.ts"
+    "server/**/*.ts",
+    "discord/**/*.ts",
+    "shared/**/*.ts"
+  ],
+  "exclude": [
+    "server/**/*.test.ts"
   ]
 }

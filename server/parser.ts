@@ -1,5 +1,14 @@
-import { PDFCheckBox, PDFDocument, PDFDropdown, PDFField, PDFOptionList, PDFRadioGroup, PDFTextField } from "pdf-lib";
-import type { Ataque, Ficha, Pericia, Poder } from "./types.js";
+import {
+  PDFCheckBox,
+  PDFDocument,
+  PDFDropdown,
+  PDFField,
+  PDFOptionList,
+  PDFRadioGroup,
+  PDFTextField
+} from "pdf-lib";
+import type { Ataque, Ficha, Pericia, Poder } from "../shared/types.js";
+import { unprocessable } from "./errors.js";
 import { compact, normalizeClassLevel, nowIso, slugify } from "./utils.js";
 
 const pericias = [
@@ -135,14 +144,55 @@ function parseArmadurasEscudos(fields: Record<string, string>) {
   return items;
 }
 
+async function loadPdf(buffer: Buffer) {
+  try {
+    return await PDFDocument.load(buffer);
+  } catch (error) {
+    const message = error instanceof Error ? error.message.toLowerCase() : "";
+    if (message.includes("encrypted")) {
+      throw unprocessable("ENCRYPTED_PDF", "O PDF está protegido ou criptografado e não pode ser processado.");
+    }
+    throw unprocessable(
+      "INVALID_PDF",
+      "Não foi possível ler o PDF. O arquivo pode estar corrompido ou usar um formato não suportado."
+    );
+  }
+}
+
 export async function parseTormentaPdf(buffer: Buffer): Promise<Ficha> {
-  const pdf = await PDFDocument.load(buffer);
-  const fields = extractFields(pdf);
+  const pdf = await loadPdf(buffer);
+  let fields: Record<string, string>;
+
+  try {
+    fields = extractFields(pdf);
+  } catch {
+    throw unprocessable(
+      "PDF_FORM_ERROR",
+      "Não foi possível ler os campos preenchíveis deste PDF."
+    );
+  }
+
+  if (!Object.keys(fields).length) {
+    throw unprocessable(
+      "PDF_WITHOUT_FORM",
+      "O PDF não possui campos de formulário preenchíveis.",
+      ["Use o modelo de ficha de Tormenta suportado pelo projeto; PDFs escaneados como imagem não são aceitos."]
+    );
+  }
+
   const nome = value(fields, "Nome");
-  if (!nome) throw new Error("O PDF não possui o campo Nome preenchido. Esse campo é obrigatório para identificar a ficha.");
+  if (!nome) {
+    throw unprocessable(
+      "MISSING_CHARACTER_NAME",
+      "O campo Nome precisa estar preenchido para identificar a ficha.",
+      ["Abra o PDF, preencha o campo Nome e envie o arquivo novamente."]
+    );
+  }
+
   const classeNivel = normalizeClassLevel(value(fields, "Classe"));
   const data = nowIso();
   const id = slugify(nome);
+
   return {
     id,
     nome,

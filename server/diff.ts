@@ -1,4 +1,4 @@
-import type { Diferenca } from "./types.js";
+import type { Diferenca } from "../shared/types.js";
 
 const ignored = new Set([
   "status",
@@ -6,7 +6,8 @@ const ignored = new Set([
   "temRevisao",
   "historico.atualizadoEm",
   "historico.versao",
-  "camposOriginais"
+  "camposOriginais",
+  "importacao"
 ]);
 
 const labels: Record<string, string> = {
