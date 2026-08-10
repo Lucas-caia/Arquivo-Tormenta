@@ -105,7 +105,7 @@ export default function App() {
         showSearch={showSearch}
         footer={(
           <>
-            <span>Arquivo Tormenta RPG · v1.1.0 · modo privado</span>
+            <span>Arquivo Tormenta RPG · v1.2.0 · modo privado</span>
             <span>/data/fichas · {arquivo.stats.total} ficha(s)</span>
           </>
         )}

@@ -1266,6 +1266,27 @@ tbody tr:last-child td {
   background: var(--card);
 }
 
+
+.import-metadata {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin-bottom: 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--card-soft);
+  font-size: 0.86rem;
+}
+
+.import-metadata strong {
+  width: 100%;
+}
+
+.import-metadata span {
+  color: var(--muted-2);
+}
+
 .alert-box {
   display: flex;
   align-items: flex-start;

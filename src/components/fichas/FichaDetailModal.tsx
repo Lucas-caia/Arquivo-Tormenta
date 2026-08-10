@@ -1,6 +1,6 @@
 import { FileJson } from "lucide-react";
 import type { Ficha } from "../../../shared/types";
-import { formatDate } from "../../utils/format";
+import { formatDate, importSourceLabel } from "../../utils/format";
 import { Modal } from "../common/Modal";
 import { StatusBadge } from "../common/StatusBadge";
 
@@ -22,6 +22,15 @@ export function FichaDetailModal({ ficha, onClose }: { ficha: Ficha; onClose: ()
         <article><span>PM</span><strong>{ficha.recursos.manaAtual || ficha.recursos.manaMaxima || "—"}/{ficha.recursos.manaMaxima || "—"}</strong></article>
         <article><span>Defesa</span><strong>{ficha.defesa.total || "—"}</strong></article>
         <article><span>Status</span><StatusBadge status={ficha.status} /></article>
+        {ficha.importacao ? (
+          <>
+            <article><span>Origem da importação</span><strong>{importSourceLabel(ficha.importacao.origem)}</strong></article>
+            <article><span>Recebida em</span><strong>{formatDate(ficha.importacao.recebidaEm)}</strong></article>
+            {ficha.importacao.enviadoPor ? (
+              <article><span>Enviada por</span><strong>{ficha.importacao.enviadoPor.nome}</strong></article>
+            ) : null}
+          </>
+        ) : null}
       </div>
 
       <div className="json-columns">

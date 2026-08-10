@@ -10,11 +10,13 @@ const root = process.cwd();
 const dataDir = path.join(root, "data");
 const fichasDir = path.join(dataDir, "fichas");
 const revisoesDir = path.join(dataDir, "revisoes");
+const locksDir = path.join(dataDir, ".locks");
 
 async function ensureDirectories() {
   await Promise.all([
     fs.mkdir(fichasDir, { recursive: true }),
-    fs.mkdir(revisoesDir, { recursive: true })
+    fs.mkdir(revisoesDir, { recursive: true }),
+    fs.mkdir(locksDir, { recursive: true })
   ]);
 }
 
@@ -24,6 +26,53 @@ function fichaPath(id: string) {
 
 function revisaoPath(id: string) {
   return path.join(revisoesDir, `${assertValidFichaId(id)}.json`);
+}
+
+const LOCK_TIMEOUT_MS = 5_000;
+const STALE_LOCK_MS = 30_000;
+const LOCK_RETRY_MS = 75;
+
+function sleep(milliseconds: number) {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+export async function withFichaLock<T>(id: string, operation: () => Promise<T>) {
+  await ensureDirectories();
+  const safeId = assertValidFichaId(id);
+  const lockPath = path.join(locksDir, `${safeId}.lock`);
+  const deadline = Date.now() + LOCK_TIMEOUT_MS;
+
+  while (true) {
+    try {
+      const handle = await fs.open(lockPath, "wx");
+      try {
+        await handle.writeFile(`${process.pid}:${nowIso()}\n`, "utf8");
+        return await operation();
+      } finally {
+        await handle.close().catch(() => undefined);
+        await fs.rm(lockPath, { force: true }).catch(() => undefined);
+      }
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code !== "EEXIST") throw error;
+
+      const stats = await fs.stat(lockPath).catch(() => null);
+      if (stats && Date.now() - stats.mtimeMs > STALE_LOCK_MS) {
+        await fs.rm(lockPath, { force: true }).catch(() => undefined);
+        continue;
+      }
+
+      if (Date.now() >= deadline) {
+        throw conflict(
+          "FICHA_BUSY",
+          "Esta ficha está sendo processada por outra operação.",
+          ["Aguarde alguns segundos e tente novamente."]
+        );
+      }
+
+      await sleep(LOCK_RETRY_MS);
+    }
+  }
 }
 
 async function exists(filePath: string) {

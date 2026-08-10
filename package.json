@@ -1,15 +1,20 @@
 {
   "name": "arquivo-tormenta-rpg",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "concurrently \"vite --host 0.0.0.0\" \"tsx watch server/server.ts\"",
+    "dev": "concurrently \"npm:dev:web\" \"npm:dev:server\"",
     "build": "vite build && tsc -p tsconfig.server.json",
     "start": "node dist-server/server/server.js",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.server.json --noEmit",
-    "test": "tsx --test server/*.test.ts",
-    "check": "npm run typecheck && npm run test && vite build"
+    "test": "tsx --test server/*.test.ts discord/*.test.ts discord/security/*.test.ts discord/submissions/*.test.ts",
+    "check": "npm run typecheck && npm run test && vite build",
+    "dev:web": "vite --host 0.0.0.0",
+    "dev:server": "tsx watch server/server.ts",
+    "bot": "tsx discord/bot.ts",
+    "bot:compiled": "node dist-server/discord/bot.js",
+    "clamav:check": "tsx discord/security/checkClamav.ts"
   },
   "dependencies": {
     "express": "4.19.2",
@@ -30,5 +35,8 @@
     "tsx": "4.19.2",
     "typescript": "5.7.3",
     "vite": "6.3.5"
+  },
+  "optionalDependencies": {
+    "discord.js": "14.27.0"
   }
 }

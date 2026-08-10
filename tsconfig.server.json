@@ -9,8 +9,18 @@
     "skipLibCheck": true,
     "outDir": "dist-server",
     "rootDir": ".",
-    "types": ["node", "express", "multer"]
+    "types": [
+      "node",
+      "express",
+      "multer"
+    ]
   },
-  "include": ["server/**/*.ts", "shared/**/*.ts"],
-  "exclude": ["server/**/*.test.ts"]
+  "include": [
+    "server/**/*.ts",
+    "discord/**/*.ts",
+    "shared/**/*.ts"
+  ],
+  "exclude": [
+    "server/**/*.test.ts"
+  ]
 }

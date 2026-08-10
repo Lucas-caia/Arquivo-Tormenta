@@ -9,7 +9,8 @@ test("ignora metadados operacionais e detecta mudanças de ficha", () => {
     status: "em-revisao",
     atualizadoEm: "antes",
     historico: { atualizadoEm: "antes", versao: 1 },
-    camposOriginais: { Nome: "Ayla" }
+    camposOriginais: { Nome: "Ayla" },
+    importacao: { origem: "web", arquivoOriginal: "ayla.pdf", recebidaEm: "antes" }
   };
   const after = {
     nome: "Ayla",
@@ -17,7 +18,8 @@ test("ignora metadados operacionais e detecta mudanças de ficha", () => {
     status: "aprovado",
     atualizadoEm: "depois",
     historico: { atualizadoEm: "depois", versao: 2 },
-    camposOriginais: { Nome: "Ayla alterada" }
+    camposOriginais: { Nome: "Ayla alterada" },
+    importacao: { origem: "discord", arquivoOriginal: "ayla-v2.pdf", recebidaEm: "depois" }
   };
 
   assert.deepEqual(diffObjects(before, after), [{

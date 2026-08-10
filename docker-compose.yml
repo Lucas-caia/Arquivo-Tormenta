@@ -11,3 +11,16 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3333
+
+  clamav:
+    image: clamav/clamav:1.5_base
+    container_name: arquivo-tormenta-clamav
+    init: true
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3310:3310"
+    volumes:
+      - clamav-db:/var/lib/clamav
+
+volumes:
+  clamav-db:

@@ -11,7 +11,7 @@ RUN npm run build
 FROM node:22-alpine AS production-deps
 WORKDIR /app
 COPY package.json ./
-RUN npm install --omit=dev --no-audit --no-fund
+RUN npm install --omit=dev --omit=optional --no-audit --no-fund
 
 FROM node:22-alpine AS runner
 WORKDIR /app

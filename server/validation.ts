@@ -10,14 +10,14 @@ export function assertValidFichaId(id: string) {
   return id;
 }
 
-type UploadedPdf = {
+export type PdfUpload = {
   size: number;
   buffer: Buffer;
   originalname: string;
   mimetype: string;
 };
 
-export function validatePdfUpload(file: UploadedPdf, maxBytes: number) {
+export function validatePdfUpload(file: PdfUpload, maxBytes: number) {
   if (!file.size || !file.buffer.length) {
     throw badRequest("EMPTY_FILE", "O arquivo enviado está vazio.");
   }

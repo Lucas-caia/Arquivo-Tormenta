@@ -1,6 +1,6 @@
 import { AlertTriangle, CheckCircle, GitCompare, Trash2 } from "lucide-react";
 import type { Diferenca, Revisao, StatusFicha } from "../../../shared/types";
-import { valueText } from "../../utils/format";
+import { formatDate, importSourceLabel, valueText } from "../../utils/format";
 import { Modal } from "../common/Modal";
 
 function DiffValue({ value }: { value: unknown }) {
@@ -48,6 +48,17 @@ export function ComparisonModal({
         </>
       )}
     >
+      {revisao.importacao ? (
+        <div className="import-metadata">
+          <strong>Origem: {importSourceLabel(revisao.importacao.origem)}</strong>
+          <span>Arquivo: {revisao.importacao.arquivoOriginal}</span>
+          <span>Recebida em: {formatDate(revisao.importacao.recebidaEm)}</span>
+          {revisao.importacao.enviadoPor ? (
+            <span>Enviada por: {revisao.importacao.enviadoPor.nome}</span>
+          ) : null}
+        </div>
+      ) : null}
+
       <div className="alert-box">
         <AlertTriangle size={17} aria-hidden="true" />
         A ficha oficial ainda não foi alterada. Revise os campos antes de aplicar esta versão.

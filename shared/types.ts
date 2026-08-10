@@ -1,5 +1,17 @@
 export type StatusFicha = "aprovado" | "em-revisao";
 
+export type OrigemImportacao = "web" | "discord";
+
+export type ImportacaoMetadata = {
+  origem: OrigemImportacao;
+  arquivoOriginal: string;
+  recebidaEm: string;
+  enviadoPor?: {
+    id: string;
+    nome: string;
+  };
+};
+
 export type TipoDiferenca = "alterado" | "adicionado" | "removido";
 
 export type Diferenca = {
@@ -64,6 +76,7 @@ export type Ficha = FichaResumo & {
     versao: number;
   };
   camposOriginais: Record<string, string>;
+  importacao?: ImportacaoMetadata;
 };
 
 export type Revisao = {
@@ -71,6 +84,7 @@ export type Revisao = {
   fichaId: string;
   nome: string;
   criadaEm: string;
+  importacao?: ImportacaoMetadata;
   atual: Ficha;
   nova: Ficha;
   diferencas: Diferenca[];

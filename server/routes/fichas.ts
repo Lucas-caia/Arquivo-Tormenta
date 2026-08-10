@@ -1,23 +1,17 @@
 import { Router } from "express";
 import type { StatusFicha } from "../../shared/types.js";
-import { diffObjects } from "../diff.js";
-import { badRequest, conflict, notFound } from "../errors.js";
+import { badRequest, notFound } from "../errors.js";
 import { asyncHandler } from "../middleware/asyncHandler.js";
 import { uploadPdf } from "../middleware/upload.js";
-import { parseTormentaPdf } from "../parser.js";
 import {
   approveAllReview,
   listFichas,
   readFicha,
-  readRevision,
-  saveNewFicha,
-  saveRevision,
   summarizeFichas,
   updateFichaStatus
 } from "../storage.js";
-import { nowIso } from "../utils.js";
-import { assertValidFichaId, validatePdfUpload } from "../validation.js";
-import { config } from "../config.js";
+import { assertValidFichaId } from "../validation.js";
+import { importarFichaPdf } from "../services/importFicha.js";
 
 export const fichasRouter = Router();
 
@@ -31,49 +25,12 @@ fichasRouter.post("/upload", uploadPdf, asyncHandler(async (request, response) =
     throw badRequest("PDF_REQUIRED", "Envie um arquivo PDF no campo pdf.");
   }
 
-  validatePdfUpload(request.file, config.maxPdfBytes);
-  const fichaExtraida = await parseTormentaPdf(request.file.buffer);
-  const atual = await readFicha(fichaExtraida.id);
+  const result = await importarFichaPdf({
+    arquivo: request.file,
+    contexto: { origem: "web" }
+  });
 
-  if (!atual) {
-    const ficha = await saveNewFicha(fichaExtraida);
-    response.status(201).json({ tipo: "nova", ficha });
-    return;
-  }
-
-  const pendingRevision = await readRevision(atual.id);
-  if (pendingRevision) {
-    throw conflict(
-      "REVISION_ALREADY_PENDING",
-      `A ficha ${atual.nome} já possui uma revisão pendente.`,
-      ["Compare e resolva a revisão atual antes de enviar outra versão."]
-    );
-  }
-
-  const nova = {
-    ...fichaExtraida,
-    status: atual.status,
-    atualizadoEm: atual.atualizadoEm,
-    historico: atual.historico
-  };
-  const diferencas = diffObjects(atual, nova);
-
-  if (!diferencas.length) {
-    response.json({ tipo: "sem-alteracoes", ficha: atual });
-    return;
-  }
-
-  const revisao = {
-    id: atual.id,
-    fichaId: atual.id,
-    nome: atual.nome,
-    criadaEm: nowIso(),
-    atual,
-    nova,
-    diferencas
-  };
-  await saveRevision(revisao);
-  response.json({ tipo: "revisao", revisao });
+  response.status(result.tipo === "nova" ? 201 : 200).json(result);
 }));
 
 fichasRouter.post("/aprovar-todas", asyncHandler(async (_request, response) => {

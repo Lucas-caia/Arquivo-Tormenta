@@ -6,7 +6,8 @@ const ignored = new Set([
   "temRevisao",
   "historico.atualizadoEm",
   "historico.versao",
-  "camposOriginais"
+  "camposOriginais",
+  "importacao"
 ]);
 
 const labels: Record<string, string> = {

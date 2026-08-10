@@ -1,75 +1,234 @@
 # Arquitetura do Arquivo Tormenta RPG
 
-## Direção
+## Visão geral
 
-O projeto adota um monólito modular porque o domínio ainda é pequeno, o número de operadores é baixo e o objetivo principal é manter a importação e o armazenamento de fichas simples e confiáveis.
+O Arquivo Tormenta RPG utiliza uma arquitetura de **monólito modular**. Frontend, API, regras de importação, persistência, integração com Git e integração com Discord pertencem ao mesmo projeto, mas são separados por responsabilidade.
 
-Microsserviços não oferecem benefício neste estágio. Eles aumentariam custo operacional, pontos de falha e complexidade de consistência sem resolver um problema real do produto.
+A aplicação possui duas entradas para fichas:
 
-## Módulos do frontend
-
-- `api`: comunicação HTTP e normalização de erros.
-- `components`: elementos reutilizáveis e componentes de domínio.
-- `hooks`: coordenação do estado e das operações da aplicação.
-- `pages`: composição de cada área navegável.
-- `routing`: navegação por hash sem dependência externa.
-- `settings`: persistência e aplicação das opções de acessibilidade.
-- `utils`: funções puras de formatação e validação local.
-
-`App.tsx` atua apenas como raiz de composição e seleção da página atual.
-
-## Módulos do backend
-
-- `routes`: contratos HTTP agrupados por recurso.
-- `middleware`: upload, tratamento assíncrono e erros.
-- `parser`: adaptação do PDF para o modelo de domínio.
-- `storage`: leitura, escrita e regras de integridade dos arquivos.
-- `git`: integração com o processo Git.
-- `validation`: validações de borda e proteção de caminhos.
-- `errors`: erros de aplicação com status e código estáveis.
-
-## Contratos compartilhados
-
-`shared/types.ts` é a fonte única dos contratos usados pelas duas aplicações. Mudanças incompatíveis devem ser feitas conscientemente e acompanhadas por testes.
-
-## Regras de dependência
-
-- páginas podem depender de componentes, hooks e contratos;
-- componentes não devem chamar a API diretamente;
-- o hook de aplicação coordena casos de uso do frontend;
-- rotas não devem conhecer detalhes do sistema de arquivos;
-- o parser não deve salvar dados;
-- a persistência não deve interpretar PDFs;
-- erros de domínio devem usar `AppError` em vez de strings soltas.
-
-## Desempenho
-
-A rota de listagem lê o conjunto de fichas uma única vez e calcula as estatísticas em memória, eliminando a duplicação de I/O da versão anterior.
-
-Para a meta futura de 5.000 a 10.000 fichas, os próximos marcos devem ser orientados por medição:
-
-1. benchmark da listagem atual;
-2. paginação e busca no servidor;
-3. cache de metadados ou índice persistente;
-4. migração para SQLite quando a leitura de milhares de arquivos se tornar o gargalo dominante.
-
-A migração para SQLite deve preservar a exportação em JSON e não exige separar o sistema em serviços.
-
-## Integridade
-
-A escrita atômica reduz o risco de JSON parcial. O bloqueio de revisão pendente evita perda silenciosa. O controle de versão na aplicação de revisões evita aplicar uma comparação obsoleta.
-
-Ainda falta controle explícito de concorrência entre processos. Se mais de uma instância do servidor for permitida, a persistência por arquivos deverá ser substituída por uma base transacional antes disso.
-
-## Evolução do histórico
-
-O modelo futuro recomendado possui entidades separadas:
+- **Interface web local**, usada para consultar, importar, revisar e administrar o acervo.
+- **Bot do Discord**, usado para receber PDFs externos e encaminhá-los para uma fila administrativa antes da importação.
 
 ```text
-Ficha
-VersaoDaFicha
-Revisao
-DecisaoDaRevisao
+                         ┌──────────────────────┐
+                         │      React SPA       │
+                         │ Interface local      │
+                         └──────────┬───────────┘
+                                    │ HTTP / JSON
+                                    ▼
+                         ┌──────────────────────┐
+                         │     Express API      │
+                         │ Rotas e middlewares │
+                         └──────────┬───────────┘
+                                    │
+                                    ▼
+                         ┌──────────────────────┐
+                         │ ImportFichaService   │◄──────────────┐
+                         └──────────┬───────────┘               │
+                                    │                           │
+                      ┌─────────────┼─────────────┐             │
+                      ▼             ▼             ▼             │
+                   Parser          Diff        Storage          │
+                   PDF→JSON                     JSON            │
+                                                    ▲            │
+                                                    │            │
+Discord ─► Bot ─► SubmissionService ─► Quarentena ─► ClamAV ───┘
 ```
 
-Cada versão deve ser imutável. A ficha aponta para a versão atual, e a revisão registra a versão de origem e a versão proposta. O Git permanece como backup ou sincronização, não como única fonte do histórico de domínio.
+## Frontend
+
+O frontend é uma **SPA em React + TypeScript**, construída com Vite.
+
+A interface é organizada em páginas e componentes reutilizáveis. A navegação utiliza rotas por hash e possui as áreas:
+
+- Dashboard;
+- Fichas;
+- Importação de PDF;
+- Revisões;
+- GitHub;
+- Configurações.
+
+A comunicação com o backend é centralizada no cliente de API em `src/api`. Estado e operações principais da aplicação são concentrados em hooks, enquanto componentes e páginas cuidam da apresentação.
+
+As preferências de acessibilidade ficam no frontend e incluem aparência, tamanho de texto, contraste e redução de movimento.
+
+```text
+src/
+├── api/            comunicação HTTP
+├── components/     componentes reutilizáveis
+├── hooks/          estado e operações da aplicação
+├── pages/          áreas principais da interface
+├── routing/        navegação por hash
+├── settings/       preferências de acessibilidade
+└── utils/          utilitários do frontend
+```
+
+## Backend
+
+O backend utiliza **Node.js + Express + TypeScript** e expõe uma API REST em `/api`.
+
+As responsabilidades são separadas entre:
+
+- `routes/`: endpoints HTTP;
+- `middleware/`: upload, tratamento assíncrono e erros;
+- `services/`: casos de uso compartilhados;
+- `parser.ts`: extração dos campos do PDF;
+- `diff.ts`: comparação entre a ficha atual e uma nova versão;
+- `storage.ts`: leitura, escrita, revisão e locks dos arquivos;
+- `git.ts`: sincronização do acervo versionado;
+- `validation.ts`: validações de IDs e arquivos.
+
+O backend também serve o build do frontend em produção.
+
+## Importação de fichas
+
+O `ImportFichaService` é o ponto central do fluxo de importação. Tanto o upload pela interface web quanto uma submissão aprovada pelo Discord utilizam o mesmo serviço.
+
+```text
+PDF
+ ↓
+Validação
+ ↓
+Parser
+ ↓
+Ficha estruturada
+ ↓
+Busca da ficha atual
+ ↓
+┌───────────────────┬────────────────────┐
+│ não existe        │ já existe          │
+▼                   ▼
+Nova ficha          Comparação
+                    ↓
+                    Revisão pendente
+```
+
+O parser utiliza `pdf-lib` e preserva o mapeamento definido para o modelo de ficha suportado. O PDF é convertido em dados estruturados e o acervo oficial permanece em JSON.
+
+Uma atualização não substitui diretamente uma ficha existente. As diferenças são armazenadas como revisão pendente e precisam ser aplicadas explicitamente.
+
+## Persistência
+
+A persistência é baseada no sistema de arquivos.
+
+```text
+data/
+├── fichas/              fichas oficiais em JSON
+├── revisoes/            revisões pendentes
+├── submissions/         metadados da fila do Discord
+├── quarantine/          PDFs aguardando decisão administrativa
+├── .locks/              locks por ficha
+└── .submission-locks/   locks por submissão
+```
+
+As escritas de JSON são feitas de forma atômica, utilizando arquivo temporário e renomeação. Locks por ficha impedem que dois processos alterem a mesma ficha simultaneamente.
+
+`submissions`, `quarantine` e os locks são dados operacionais e não fazem parte do acervo versionado no Git.
+
+## Revisões
+
+Quando uma ficha já existe, uma nova importação gera uma revisão contendo:
+
+- ficha atual;
+- nova versão extraída;
+- diferenças encontradas;
+- metadados da importação.
+
+A revisão pode ser aplicada ou descartada. O sistema impede a sobrescrita de uma revisão ainda pendente e bloqueia a aplicação de uma revisão que ficou obsoleta em relação à ficha oficial.
+
+## Integração com Discord
+
+O bot é um processo separado dentro do mesmo projeto e utiliza `discord.js`.
+
+O comando `/enviar-ficha` recebe o PDF no canal configurado e cria uma submissão. Nesse momento, o arquivo ainda não é enviado ao parser.
+
+```text
+/enviar-ficha
+      ↓
+Validação inicial
+      ↓
+SubmissionService
+      ↓
+Quarentena
+      ↓
+Mensagem no canal administrativo
+      ↓
+[ Importar ficha ]  [ Descartar ]
+```
+
+O módulo é dividido em comandos, componentes, configuração, autorização, segurança e gerenciamento das submissões.
+
+```text
+discord/
+├── commands/       slash commands
+├── components/     botões e mensagens
+├── security/       comunicação com ClamAV
+├── submissions/    fila, quarentena e decisões
+├── authorization.ts
+├── config.ts
+└── bot.ts
+```
+
+Somente usuários configurados como administradores podem importar ou descartar uma submissão.
+
+## Quarentena e ClamAV
+
+Arquivos recebidos pelo Discord são armazenados temporariamente em `data/quarantine` com identificadores internos.
+
+Antes de uma importação administrativa, o bot envia o conteúdo ao `clamd` através do protocolo `INSTREAM`.
+
+```text
+Quarentena
+    ↓
+  ClamAV
+  ↙    ↘
+limpo   ameaça/erro
+  ↓         ↓
+Parser    bloqueio
+```
+
+Somente uma resposta limpa permite que o arquivo seja entregue ao `ImportFichaService`. Arquivos importados, descartados, bloqueados ou expirados são removidos da quarentena.
+
+Submissões pendentes iguais são identificadas por SHA-256, e locks por submissão impedem decisões concorrentes sobre o mesmo arquivo.
+
+## Git
+
+A integração Git é executada pelo backend através do Git CLI.
+
+Somente os diretórios do acervo são preparados automaticamente para commit:
+
+```text
+data/fichas
+data/revisoes
+```
+
+A interface permite consultar o estado do repositório e executar `pull` e `push`. Dados temporários do Discord e arquivos em quarentena ficam fora desse fluxo.
+
+## Execução
+
+A aplicação principal é executada em Docker com o diretório `data` e o repositório Git montados no container. O frontend compilado é servido pelo Express em `localhost:3333`.
+
+O ClamAV é executado como um serviço separado no Docker Compose.
+
+O bot do Discord é executado como um processo Node.js separado e acessa os mesmos dados locais da aplicação.
+
+```text
+Máquina local
+│
+├── Docker
+│   ├── Arquivo Tormenta
+│   │   └── React + Express
+│   └── ClamAV
+│
+├── Bot Discord
+│
+└── data/
+    ├── fichas
+    ├── revisoes
+    ├── submissions
+    └── quarantine
+```
+
+## Tipos compartilhados
+
+Os contratos utilizados por frontend e backend ficam em `shared/types.ts`. Isso evita manter representações diferentes da mesma ficha, revisão ou resposta de API em pontos distintos do projeto.
