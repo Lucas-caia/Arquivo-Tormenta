@@ -1,85 +1,234 @@
 # Arquitetura do Arquivo Tormenta RPG
 
-## Direção
+## Visão geral
 
-O projeto adota um monólito modular. A prioridade é manter importação, revisão, histórico e armazenamento simples, rápidos e confiáveis sem introduzir distribuição desnecessária.
+O Arquivo Tormenta RPG utiliza uma arquitetura de **monólito modular**. Frontend, API, regras de importação, persistência, integração com Git e integração com Discord pertencem ao mesmo projeto, mas são separados por responsabilidade.
 
-## Entradas do sistema
+A aplicação possui duas entradas para fichas:
 
-A interface web continua sendo uma entrada administrativa direta. O Discord funciona como uma caixa de entrada para pessoas externas:
+- **Interface web local**, usada para consultar, importar, revisar e administrar o acervo.
+- **Bot do Discord**, usado para receber PDFs externos e encaminhá-los para uma fila administrativa antes da importação.
 
 ```text
-Interface web ────────────────────────────┐
-                                         ▼
-                                  ImportFichaService
-                                         ▲
-Discord ─► SubmissionService ─► ClamAV ──┘
-              │
-              └─► Quarentena + aprovação administrativa
+                         ┌──────────────────────┐
+                         │      React SPA       │
+                         │ Interface local      │
+                         └──────────┬───────────┘
+                                    │ HTTP / JSON
+                                    ▼
+                         ┌──────────────────────┐
+                         │     Express API      │
+                         │ Rotas e middlewares │
+                         └──────────┬───────────┘
+                                    │
+                                    ▼
+                         ┌──────────────────────┐
+                         │ ImportFichaService   │◄──────────────┐
+                         └──────────┬───────────┘               │
+                                    │                           │
+                      ┌─────────────┼─────────────┐             │
+                      ▼             ▼             ▼             │
+                   Parser          Diff        Storage          │
+                   PDF→JSON                     JSON            │
+                                                    ▲            │
+                                                    │            │
+Discord ─► Bot ─► SubmissionService ─► Quarentena ─► ClamAV ───┘
 ```
 
-O PDF enviado pelo Discord não é entregue ao parser durante a submissão. Ele é salvo com nome interno em `data/quarantine`, enquanto os metadados operacionais ficam em `data/submissions`.
+## Frontend
 
-Somente depois de um administrador clicar em **Importar ficha** o arquivo é enviado ao `clamd` por `INSTREAM`. Uma resposta limpa permite chamar o `ImportFichaService`; uma detecção bloqueia a importação e remove o arquivo da quarentena.
+O frontend é uma **SPA em React + TypeScript**, construída com Vite.
 
-## Módulo Discord
+A interface é organizada em páginas e componentes reutilizáveis. A navegação utiliza rotas por hash e possui as áreas:
 
-- `bot.ts`: ciclo de vida do cliente, comandos, botões e limpeza periódica.
-- `config.ts`: servidor, canais, administradores, TTL e conexão com ClamAV.
-- `authorization.ts`: separa permissão de submissão e permissão administrativa.
-- `downloadAttachment.ts`: download limitado e temporário do anexo.
-- `commands/enviarFicha.ts`: recebe o PDF e cria a submissão.
-- `components/`: mensagens e ações dos botões administrativos.
-- `submissions/`: modelo, armazenamento, quarentena, expiração e casos de uso.
-- `security/`: cliente mínimo do protocolo `clamd` e verificação de disponibilidade.
+- Dashboard;
+- Fichas;
+- Importação de PDF;
+- Revisões;
+- GitHub;
+- Configurações.
 
-## Segurança da submissão
+A comunicação com o backend é centralizada no cliente de API em `src/api`. Estado e operações principais da aplicação são concentrados em hooks, enquanto componentes e páginas cuidam da apresentação.
 
-O fluxo do Discord segue estas regras:
+As preferências de acessibilidade ficam no frontend e incluem aparência, tamanho de texto, contraste e redução de movimento.
 
-1. somente o canal de submissão aceita `/enviar-ficha`;
-2. qualquer pessoa com acesso a esse canal pode submeter, sem acesso ao painel;
-3. nome, MIME, tamanho e assinatura PDF são validados antes de aceitar a submissão;
-4. o arquivo recebe um nome interno e nunca é servido pela aplicação;
-5. submissões duplicadas ainda pendentes são detectadas por SHA-256;
-6. somente IDs em `DISCORD_ADMIN_USER_IDS` podem importar ou descartar;
-7. o ClamAV é obrigatório para importar; indisponibilidade bloqueia a ação;
-8. arquivos detectados são removidos sem chegar ao parser;
-9. arquivos importados ou descartados também são removidos da quarentena;
-10. submissões antigas expiram e têm o arquivo removido automaticamente.
+```text
+src/
+├── api/            comunicação HTTP
+├── components/     componentes reutilizáveis
+├── hooks/          estado e operações da aplicação
+├── pages/          áreas principais da interface
+├── routing/        navegação por hash
+├── settings/       preferências de acessibilidade
+└── utils/          utilitários do frontend
+```
 
-Os diretórios de quarentena e metadados de submissão são operacionais e ficam fora do Git.
+## Backend
 
-## ClamAV
+O backend utiliza **Node.js + Express + TypeScript** e expõe uma API REST em `/api`.
 
-O projeto usa `clamd`, executado pelo Docker Compose. O bot se conecta à porta TCP publicada somente em `127.0.0.1:3310` e envia o conteúdo pelo comando `INSTREAM`; não compartilha caminhos de arquivos com o container.
+As responsabilidades são separadas entre:
 
-O cliente usa apenas módulos nativos do Node.js e não adiciona uma biblioteca de antivírus ao código da aplicação.
+- `routes/`: endpoints HTTP;
+- `middleware/`: upload, tratamento assíncrono e erros;
+- `services/`: casos de uso compartilhados;
+- `parser.ts`: extração dos campos do PDF;
+- `diff.ts`: comparação entre a ficha atual e uma nova versão;
+- `storage.ts`: leitura, escrita, revisão e locks dos arquivos;
+- `git.ts`: sincronização do acervo versionado;
+- `validation.ts`: validações de IDs e arquivos.
 
-A verificação ocorre somente no fluxo de aprovação das submissões do Discord. Uploads administrativos feitos diretamente pela interface local continuam no fluxo atual.
+O backend também serve o build do frontend em produção.
 
-## Integridade entre processos
+## Importação de fichas
 
-API e bot podem acessar `data` simultaneamente. O armazenamento de fichas continua protegido por lock por ficha e escritas atômicas.
+O `ImportFichaService` é o ponto central do fluxo de importação. Tanto o upload pela interface web quanto uma submissão aprovada pelo Discord utilizam o mesmo serviço.
 
-Submissões possuem um lock separado por ID. Isso impede que dois administradores cliquem em **Importar** e **Descartar** ao mesmo tempo ou que a mesma submissão seja processada duas vezes.
+```text
+PDF
+ ↓
+Validação
+ ↓
+Parser
+ ↓
+Ficha estruturada
+ ↓
+Busca da ficha atual
+ ↓
+┌───────────────────┬────────────────────┐
+│ não existe        │ já existe          │
+▼                   ▼
+Nova ficha          Comparação
+                    ↓
+                    Revisão pendente
+```
 
-## Persistência operacional
+O parser utiliza `pdf-lib` e preserva o mapeamento definido para o modelo de ficha suportado. O PDF é convertido em dados estruturados e o acervo oficial permanece em JSON.
+
+Uma atualização não substitui diretamente uma ficha existente. As diferenças são armazenadas como revisão pendente e precisam ser aplicadas explicitamente.
+
+## Persistência
+
+A persistência é baseada no sistema de arquivos.
 
 ```text
 data/
-├── fichas/          acervo oficial
-├── revisoes/        revisões pendentes
-├── submissions/     metadados locais da fila do Discord
-├── quarantine/      PDFs aguardando decisão, com nomes internos
-├── .locks/          locks das fichas
-└── .submission-locks/ locks das submissões
+├── fichas/              fichas oficiais em JSON
+├── revisoes/            revisões pendentes
+├── submissions/         metadados da fila do Discord
+├── quarantine/          PDFs aguardando decisão administrativa
+├── .locks/              locks por ficha
+└── .submission-locks/   locks por submissão
 ```
 
-`submissions` e `quarantine` não são adicionados ao Git. A meta continua sendo migrar o armazenamento operacional para SQLite quando isso trouxer benefício mensurável.
+As escritas de JSON são feitas de forma atômica, utilizando arquivo temporário e renomeação. Locks por ficha impedem que dois processos alterem a mesma ficha simultaneamente.
 
-## Desempenho
+`submissions`, `quarantine` e os locks são dados operacionais e não fazem parte do acervo versionado no Git.
 
-O ClamAV é um daemon persistente e não participa de consultas, dashboard, busca ou listagem de fichas. O custo de scan existe apenas quando um administrador aprova uma submissão.
+## Revisões
 
-Para a meta futura de 5.000 a 10.000 fichas, os próximos marcos continuam sendo paginação e busca no servidor, benchmarks e uma eventual migração para SQLite baseada em medição.
+Quando uma ficha já existe, uma nova importação gera uma revisão contendo:
+
+- ficha atual;
+- nova versão extraída;
+- diferenças encontradas;
+- metadados da importação.
+
+A revisão pode ser aplicada ou descartada. O sistema impede a sobrescrita de uma revisão ainda pendente e bloqueia a aplicação de uma revisão que ficou obsoleta em relação à ficha oficial.
+
+## Integração com Discord
+
+O bot é um processo separado dentro do mesmo projeto e utiliza `discord.js`.
+
+O comando `/enviar-ficha` recebe o PDF no canal configurado e cria uma submissão. Nesse momento, o arquivo ainda não é enviado ao parser.
+
+```text
+/enviar-ficha
+      ↓
+Validação inicial
+      ↓
+SubmissionService
+      ↓
+Quarentena
+      ↓
+Mensagem no canal administrativo
+      ↓
+[ Importar ficha ]  [ Descartar ]
+```
+
+O módulo é dividido em comandos, componentes, configuração, autorização, segurança e gerenciamento das submissões.
+
+```text
+discord/
+├── commands/       slash commands
+├── components/     botões e mensagens
+├── security/       comunicação com ClamAV
+├── submissions/    fila, quarentena e decisões
+├── authorization.ts
+├── config.ts
+└── bot.ts
+```
+
+Somente usuários configurados como administradores podem importar ou descartar uma submissão.
+
+## Quarentena e ClamAV
+
+Arquivos recebidos pelo Discord são armazenados temporariamente em `data/quarantine` com identificadores internos.
+
+Antes de uma importação administrativa, o bot envia o conteúdo ao `clamd` através do protocolo `INSTREAM`.
+
+```text
+Quarentena
+    ↓
+  ClamAV
+  ↙    ↘
+limpo   ameaça/erro
+  ↓         ↓
+Parser    bloqueio
+```
+
+Somente uma resposta limpa permite que o arquivo seja entregue ao `ImportFichaService`. Arquivos importados, descartados, bloqueados ou expirados são removidos da quarentena.
+
+Submissões pendentes iguais são identificadas por SHA-256, e locks por submissão impedem decisões concorrentes sobre o mesmo arquivo.
+
+## Git
+
+A integração Git é executada pelo backend através do Git CLI.
+
+Somente os diretórios do acervo são preparados automaticamente para commit:
+
+```text
+data/fichas
+data/revisoes
+```
+
+A interface permite consultar o estado do repositório e executar `pull` e `push`. Dados temporários do Discord e arquivos em quarentena ficam fora desse fluxo.
+
+## Execução
+
+A aplicação principal é executada em Docker com o diretório `data` e o repositório Git montados no container. O frontend compilado é servido pelo Express em `localhost:3333`.
+
+O ClamAV é executado como um serviço separado no Docker Compose.
+
+O bot do Discord é executado como um processo Node.js separado e acessa os mesmos dados locais da aplicação.
+
+```text
+Máquina local
+│
+├── Docker
+│   ├── Arquivo Tormenta
+│   │   └── React + Express
+│   └── ClamAV
+│
+├── Bot Discord
+│
+└── data/
+    ├── fichas
+    ├── revisoes
+    ├── submissions
+    └── quarantine
+```
+
+## Tipos compartilhados
+
+Os contratos utilizados por frontend e backend ficam em `shared/types.ts`. Isso evita manter representações diferentes da mesma ficha, revisão ou resposta de API em pontos distintos do projeto.
