@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.2.1
+
+- Reformulação da funcionalidade do GitHub
+
 ## 1.2.0
 
 - Bot do Discord para envio de fichas pelo comando `/enviar-ficha`.
