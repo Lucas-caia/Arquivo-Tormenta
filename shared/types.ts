@@ -108,12 +108,65 @@ export type UploadResponse =
   | { tipo: "sem-alteracoes"; ficha: Ficha }
   | { tipo: "revisao"; revisao: Revisao };
 
+export type GitSyncScope = "fichas" | "revisoes";
+
+export type GitCommitStyle = "descritivo" | "conventional" | "personalizado";
+
+export type GitSettings = {
+  remoteUrl: string;
+  branch: string;
+  escopos: Record<GitSyncScope, boolean>;
+  estiloCommit: GitCommitStyle;
+  templates: {
+    novaFicha: string;
+    fichaAtualizada: string;
+    multiplasAlteracoes: string;
+  };
+  autor: {
+    nome: string;
+    email: string;
+  };
+};
+
 export type GitStatus = {
   conectado: boolean;
+  gitDisponivel: boolean;
+  chaveConfigurada: boolean;
+  configurado: boolean;
+  repositorioInicializado: boolean;
+  remoteUrl: string;
   branch: string;
   alterados: string[];
   mensagem: string;
+  verificadoEm?: string;
   atualizadoEm: string;
+};
+
+export type GitSettingsResponse = {
+  settings: GitSettings;
+  status: GitStatus;
+};
+
+export type GitConnectionResponse = {
+  sucesso: true;
+  mensagem: string;
+  branches: string[];
+  status: GitStatus;
+};
+
+export type GitPreview = {
+  fingerprint: string;
+  branch: string;
+  remoteUrl: string;
+  arquivos: Array<{
+    status: string;
+    caminho: string;
+  }>;
+  total: number;
+  novasFichas: number;
+  fichasAtualizadas: number;
+  revisoesAlteradas: number;
+  mensagemCommit: string;
 };
 
 export type GitActionResponse = {

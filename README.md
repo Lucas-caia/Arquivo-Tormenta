@@ -24,7 +24,7 @@ Depois do processamento, o PDF é removido. O acervo continua armazenando apenas
 - Comparação e descarte de revisões pendentes.
 - Aprovação de fichas novas.
 - Exportação consolidada em JSON.
-- Integração com Git para pull, status e push.
+- Sincronização GitHub por SSH, com branch, escopo e mensagens de commit configuráveis.
 - Configurações de acessibilidade.
 
 ## Uso privado
@@ -81,6 +81,14 @@ npm run dev
 ```
 
 Nesse modo, a interface do Vite fica em `http://localhost:5173`. O ClamAV pode continuar sendo executado pelo Docker Compose.
+
+## Sincronização com GitHub
+
+A aplicação usa uma **Deploy Key SSH exclusiva do repositório**. A chave privada fica somente em `.secrets/github_deploy_key`, fora do Git e fora da imagem Docker.
+
+Na área **GitHub** da interface é possível configurar a URL SSH do repositório, a branch, quais grupos de dados entram na sincronização e o padrão das mensagens de commit. O Push sempre apresenta uma prévia antes da confirmação.
+
+A sincronização usa um repositório interno em `runtime/git-sync`, separado do `.git` utilizado para desenvolver o projeto.
 
 ## Verificações
 

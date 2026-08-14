@@ -5,7 +5,13 @@ dist-server
 .DS_Store
 npm-debug.log
 
+.secrets/*
+!.secrets/.gitkeep
+runtime/*
+!runtime/.gitkeep
+
 data/.locks/
+data/.git-sync.lock
 
 data/quarantine/*
 !data/quarantine/.gitkeep

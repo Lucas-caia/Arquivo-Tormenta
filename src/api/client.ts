@@ -2,6 +2,10 @@ import type {
   ApiErrorPayload,
   Ficha,
   GitActionResponse,
+  GitConnectionResponse,
+  GitPreview,
+  GitSettings,
+  GitSettingsResponse,
   GitStatus,
   ListaFichasResponse,
   Revisao,
@@ -112,10 +116,38 @@ export function gitStatus() {
   return request<GitStatus>("/api/git/status");
 }
 
+export function gitSettings() {
+  return request<GitSettings>("/api/git/settings");
+}
+
+export function salvarGitSettings(settings: GitSettings) {
+  return request<GitSettingsResponse>("/api/git/settings", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(settings)
+  });
+}
+
+export function verificarGit() {
+  return request<GitConnectionResponse>("/api/git/verify", { method: "POST" });
+}
+
+export function listarGitBranches() {
+  return request<{ branches: string[] }>("/api/git/branches");
+}
+
+export function gitPreviewPush() {
+  return request<GitPreview>("/api/git/preview", { method: "POST" });
+}
+
 export function gitPull() {
   return request<GitActionResponse>("/api/git/pull", { method: "POST" });
 }
 
-export function gitPush() {
-  return request<GitActionResponse>("/api/git/push", { method: "POST" });
+export function gitPush(fingerprint: string) {
+  return request<GitActionResponse>("/api/git/push", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ fingerprint })
+  });
 }

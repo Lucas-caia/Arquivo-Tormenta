@@ -12,6 +12,11 @@
 - Detecção de arquivos duplicados enquanto uma submissão igual ainda está pendente.
 - Registro da origem, arquivo, horário e remetente das importações realizadas pelo Discord.
 - Serviço de importação compartilhado entre a interface web e o Discord.
+- Sincronização GitHub autenticada por Deploy Key SSH mantida somente no ambiente local.
+- Branch e grupos de dados do Push configuráveis pela interface.
+- Prévia obrigatória de arquivos e mensagem antes de confirmar um Push.
+- Mensagens de commit distintas para fichas novas, atualizadas e alterações em lote.
+- Pull bloqueado quando existem alterações locais ainda não sincronizadas.
 
 ## 1.1.0
 

@@ -58,10 +58,17 @@ export default function App() {
         return (
           <GitHubPage
             status={arquivo.git}
+            settings={arquivo.gitConfig}
+            branches={arquivo.gitBranches}
+            preview={arquivo.gitPreview}
             busy={arquivo.gitBusy}
             onRefresh={arquivo.handleRefreshGit}
+            onSave={arquivo.handleSaveGitSettings}
+            onVerify={arquivo.handleVerifyGit}
             onPull={arquivo.handlePull}
-            onPush={arquivo.handlePush}
+            onPreparePush={arquivo.handlePreparePush}
+            onConfirmPush={arquivo.handleConfirmPush}
+            onCancelPush={arquivo.handleCancelPush}
           />
         );
       case "configuracoes":
@@ -88,7 +95,7 @@ export default function App() {
             onApproveAll={arquivo.handleApproveAll}
             onRefreshGit={arquivo.handleRefreshGit}
             onPull={arquivo.handlePull}
-            onPush={arquivo.handlePush}
+            onOpenGitHub={() => { window.location.hash = "#/github"; }}
           />
         );
     }

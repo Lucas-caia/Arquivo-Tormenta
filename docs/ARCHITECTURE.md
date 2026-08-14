@@ -75,7 +75,7 @@ As responsabilidades são separadas entre:
 - `parser.ts`: extração dos campos do PDF;
 - `diff.ts`: comparação entre a ficha atual e uma nova versão;
 - `storage.ts`: leitura, escrita, revisão e locks dos arquivos;
-- `git.ts`: sincronização do acervo versionado;
+- `git/`: configuração, autenticação SSH, preparação de commits e sincronização do acervo;
 - `validation.ts`: validações de IDs e arquivos.
 
 O backend também serve o build do frontend em produção.
@@ -193,20 +193,24 @@ Submissões pendentes iguais são identificadas por SHA-256, e locks por submiss
 
 ## Git
 
-A integração Git é executada pelo backend através do Git CLI.
+A integração Git é executada pelo backend através do Git CLI e utiliza um **repositório de sincronização isolado** em `runtime/git-sync`. Esse repositório é independente do `.git` usado no desenvolvimento do código.
 
-Somente os diretórios do acervo são preparados automaticamente para commit:
+A autenticação com o GitHub utiliza SSH. A chave privada é lida de `.secrets/github_deploy_key`, diretório ignorado pelo Git e montado como somente leitura no container. A chave não é armazenada na interface nem na configuração persistida.
+
+A configuração persistida em `runtime/git-settings.json` contém apenas dados não secretos: URL SSH do repositório, branch, grupos sincronizados, autor e padrões de mensagens de commit.
+
+Os grupos disponíveis para sincronização são:
 
 ```text
 data/fichas
 data/revisoes
 ```
 
-A interface permite consultar o estado do repositório e executar `pull` e `push`. Dados temporários do Discord e arquivos em quarentena ficam fora desse fluxo.
+O Push copia somente os grupos selecionados para o repositório de sincronização, compara as alterações, gera a mensagem de commit e exige uma prévia antes do envio. O Pull verifica primeiro se existem mudanças locais ainda não sincronizadas e, nesse caso, é bloqueado para evitar sobrescrita automática do acervo.
 
 ## Execução
 
-A aplicação principal é executada em Docker com o diretório `data` e o repositório Git montados no container. O frontend compilado é servido pelo Express em `localhost:3333`.
+A aplicação principal é executada em Docker com `data`, `runtime` e `.secrets` montados separadamente. O frontend compilado é servido pelo Express em `localhost:3333`.
 
 O ClamAV é executado como um serviço separado no Docker Compose.
 
@@ -222,11 +226,16 @@ Máquina local
 │
 ├── Bot Discord
 │
-└── data/
-    ├── fichas
-    ├── revisoes
-    ├── submissions
-    └── quarantine
+├── data/
+│   ├── fichas
+│   ├── revisoes
+│   ├── submissions
+│   └── quarantine
+├── runtime/
+│   ├── git-settings.json
+│   └── git-sync/
+└── .secrets/
+    └── github_deploy_key
 ```
 
 ## Tipos compartilhados

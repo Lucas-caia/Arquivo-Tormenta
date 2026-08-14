@@ -3,6 +3,8 @@ import type {
   Estatisticas,
   Ficha,
   FichaResumo,
+  GitPreview,
+  GitSettings,
   GitStatus,
   Revisao,
   StatusFicha
@@ -14,12 +16,16 @@ import {
   atualizarStatus,
   descartarRevisao,
   enviarPdf,
+  gitPreviewPush,
   gitPull,
   gitPush,
+  gitSettings,
   gitStatus,
-  listarFichas,
   obterFicha,
-  obterRevisao
+  obterRevisao,
+  listarFichas,
+  salvarGitSettings,
+  verificarGit
 } from "../api/client";
 import type { ToastMessage } from "../components/common/Toast";
 import { validatePdfFile } from "../utils/fileValidation";
@@ -46,6 +52,9 @@ export function useArquivoTormenta() {
   const [fichas, setFichas] = useState<FichaResumo[]>([]);
   const [stats, setStats] = useState<Estatisticas>(emptyStats);
   const [git, setGit] = useState<GitStatus | null>(null);
+  const [gitConfig, setGitConfig] = useState<GitSettings | null>(null);
+  const [gitBranches, setGitBranches] = useState<string[]>([]);
+  const [gitPreview, setGitPreview] = useState<GitPreview | null>(null);
   const [loading, setLoading] = useState(true);
   const [uploadBusy, setUploadBusy] = useState(false);
   const [gitBusy, setGitBusy] = useState(false);
@@ -67,14 +76,21 @@ export function useArquivoTormenta() {
   }, []);
 
   const refreshAll = useCallback(async () => {
-    const [fichasResult, gitResult] = await Promise.allSettled([listarFichas(), gitStatus()]);
+    const [fichasResult, gitResult, settingsResult] = await Promise.allSettled([
+      listarFichas(),
+      gitStatus(),
+      gitSettings()
+    ]);
+
     if (fichasResult.status === "fulfilled") {
       setFichas(fichasResult.value.fichas);
       setStats(fichasResult.value.estatisticas);
     } else {
       throw fichasResult.reason;
     }
+
     if (gitResult.status === "fulfilled") setGit(gitResult.value);
+    if (settingsResult.status === "fulfilled") setGitConfig(settingsResult.value);
   }, []);
 
   useEffect(() => {
@@ -185,7 +201,80 @@ export function useArquivoTormenta() {
     }
   }, [refreshFichas]);
 
+  const handleSaveGitSettings = useCallback(async (settings: GitSettings) => {
+    setGitBusy(true);
+    try {
+      const result = await salvarGitSettings(settings);
+      setGitConfig(result.settings);
+      setGit(result.status);
+      setGitPreview(null);
+      setGitBranches([]);
+      setToast({ text: "Configurações Git salvas.", type: "ok" });
+    } catch (error) {
+      setToast(errorMessage(error, "Não foi possível salvar as configurações Git."));
+      throw error;
+    } finally {
+      setGitBusy(false);
+    }
+  }, []);
+
+  const handleVerifyGit = useCallback(async () => {
+    setGitBusy(true);
+    try {
+      const result = await verificarGit();
+      setGit(result.status);
+      setGitBranches(result.branches);
+      setToast({ text: result.mensagem, type: "ok" });
+    } catch (error) {
+      setToast(errorMessage(error, "Não foi possível verificar a conexão SSH."));
+    } finally {
+      setGitBusy(false);
+    }
+  }, []);
+
+  const handlePreparePush = useCallback(async () => {
+    setGitBusy(true);
+    try {
+      const preview = await gitPreviewPush();
+      setGitPreview(preview);
+      setToast({
+        text: preview.total
+          ? `Prévia preparada com ${preview.total} arquivo(s).`
+          : "Não há alterações selecionadas para enviar.",
+        type: preview.total ? "info" : "ok"
+      });
+    } catch (error) {
+      setGitPreview(null);
+      setToast(errorMessage(error, "Não foi possível preparar o Push."));
+    } finally {
+      setGitBusy(false);
+    }
+  }, []);
+
+  const handleConfirmPush = useCallback(async () => {
+    if (!gitPreview?.fingerprint) return;
+    setGitBusy(true);
+    try {
+      const result = await gitPush(gitPreview.fingerprint);
+      setGit(result.status);
+      setGitPreview(null);
+      setToast({ text: result.mensagem, type: result.sucesso ? "ok" : "error", details: result.detalhes ? [result.detalhes] : undefined });
+    } catch (error) {
+      setGitPreview(null);
+      setToast(errorMessage(error, "Não foi possível enviar as alterações."));
+    } finally {
+      setGitBusy(false);
+    }
+  }, [gitPreview]);
+
+  const handleCancelPush = useCallback(() => setGitPreview(null), []);
+
   const handlePull = useCallback(async () => {
+    const confirmed = window.confirm(
+      "O Pull só será executado se não houver alterações locais pendentes nos grupos selecionados. Deseja continuar?"
+    );
+    if (!confirmed) return;
+
     setGitBusy(true);
     try {
       const result = await gitPull();
@@ -199,23 +288,6 @@ export function useArquivoTormenta() {
     }
   }, [refreshFichas]);
 
-  const handlePush = useCallback(async () => {
-    setGitBusy(true);
-    try {
-      const result = await gitPush();
-      setGit(result.status);
-      setToast({ text: result.mensagem, type: result.sucesso ? "ok" : "error", details: result.detalhes ? [result.detalhes] : undefined });
-    } catch (error) {
-      setToast(errorMessage(error, "Não foi possível enviar as alterações."));
-    } finally {
-      setGitBusy(false);
-    }
-  }, []);
-
-  const closeRevision = useCallback(() => setRevisao(null), []);
-  const closeDetail = useCallback(() => setDetail(null), []);
-  const closeToast = useCallback(() => setToast(null), []);
-
   const handleRefreshGit = useCallback(async () => {
     setGitBusy(true);
     try {
@@ -227,10 +299,17 @@ export function useArquivoTormenta() {
     }
   }, [refreshGit]);
 
+  const closeRevision = useCallback(() => setRevisao(null), []);
+  const closeDetail = useCallback(() => setDetail(null), []);
+  const closeToast = useCallback(() => setToast(null), []);
+
   return {
     fichas,
     stats,
     git,
+    gitConfig,
+    gitBranches,
+    gitPreview,
     loading,
     uploadBusy,
     gitBusy,
@@ -245,8 +324,12 @@ export function useArquivoTormenta() {
     handleApplyRevision,
     handleDiscardRevision,
     handleApproveAll,
+    handleSaveGitSettings,
+    handleVerifyGit,
+    handlePreparePush,
+    handleConfirmPush,
+    handleCancelPush,
     handlePull,
-    handlePush,
     handleRefreshGit,
     closeRevision,
     closeDetail,

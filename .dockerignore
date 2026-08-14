@@ -2,6 +2,8 @@ node_modules
 dist
 dist-server
 .git
+.secrets
+runtime
 data/quarantine
 data/submissions
 data/.submission-locks
