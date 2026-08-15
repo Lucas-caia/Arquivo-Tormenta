@@ -32,7 +32,7 @@ A aplicação possui duas entradas para fichas:
                    PDF→JSON                     JSON            │
                                                     ▲            │
                                                     │            │
-Discord ─► Bot ─► SubmissionService ─► Quarentena ─► ClamAV ───┘
+Discord ─► Caixa de entrada ─► Bot/Sync ─► SubmissionService ─► Quarentena ─► ClamAV ───┘
 ```
 
 ## Frontend
@@ -138,38 +138,43 @@ A revisão pode ser aplicada ou descartada. O sistema impede a sobrescrita de um
 
 ## Integração com Discord
 
-O bot é um processo separado dentro do mesmo projeto e utiliza `discord.js`.
+O bot é um processo separado dentro do mesmo projeto e utiliza `discord.js`. O canal de submissões também funciona como uma **caixa de entrada durável**: o usuário pode publicar o PDF diretamente no canal mesmo quando o processo local está desligado, porque a mensagem e o anexo permanecem armazenados pelo Discord.
 
-O comando `/enviar-ficha` recebe o PDF no canal configurado e cria uma submissão. Nesse momento, o arquivo ainda não é enviado ao parser.
+Quando o bot inicia, recebe uma nova mensagem ou executa a reconciliação periódica, `channelInbox` consulta o histórico a partir do último checkpoint local. Cada anexo é identificado pelo ID da mensagem e do próprio anexo, evitando criar duas submissões para o mesmo item durante uma recuperação.
 
 ```text
-/enviar-ficha
-      ↓
-Validação inicial
-      ↓
-SubmissionService
-      ↓
-Quarentena
-      ↓
-Mensagem no canal administrativo
-      ↓
-[ Importar ficha ]  [ Descartar ]
+Usuário ─► Canal Discord ─► mensagem + PDF armazenados
+                              │
+                              │ bot disponível / recuperação
+                              ▼
+                         ChannelInbox ─► SubmissionService ─► Quarentena
+                                                               │
+                                                               ▼
+                                                    Canal administrativo
+                                                               │
+                                                   [ Importar ] [ Descartar ]
 ```
+
+O checkpoint da caixa de entrada fica em `data/submissions/.inbox-state.json`, fora do Git. Se o processo cair depois de criar uma submissão, a origem Discord gravada nos metadados permite reconhecer o anexo na próxima sincronização sem duplicá-lo. O comando `/enviar-ficha` continua disponível quando o bot está on-line e reutiliza o mesmo envio para o canal administrativo.
 
 O módulo é dividido em comandos, componentes, configuração, autorização, segurança e gerenciamento das submissões.
 
 ```text
 discord/
-├── commands/       slash commands
-├── components/     botões e mensagens
-├── security/       comunicação com ClamAV
-├── submissions/    fila, quarentena e decisões
+├── commands/              slash commands
+├── components/            botões e mensagens
+├── security/              comunicação com ClamAV
+├── submissions/
+│   ├── channelInbox.ts    sincronização do canal
+│   ├── inboxState.ts      checkpoint local
+│   ├── reviewChannel.ts   anúncio administrativo compartilhado
+│   └── ...                quarentena, fila e decisões
 ├── authorization.ts
 ├── config.ts
 └── bot.ts
 ```
 
-Somente usuários configurados como administradores podem importar ou descartar uma submissão.
+Somente usuários configurados como administradores podem importar ou descartar uma submissão. A indisponibilidade da sincronização não publica o painel nem move o processamento para o Discord: parser, ClamAV, revisão e armazenamento continuam locais.
 
 ## Quarentena e ClamAV
 

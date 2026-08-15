@@ -18,7 +18,7 @@ export type DashboardPageProps = {
   onApproveAll: () => void;
   onRefreshGit: () => void;
   onPull: () => void;
-  onPush: () => void;
+  onOpenGitHub: () => void;
 };
 
 export function DashboardPage(props: DashboardPageProps) {
@@ -43,7 +43,7 @@ export function DashboardPage(props: DashboardPageProps) {
             busy={props.gitBusy}
             onRefresh={props.onRefreshGit}
             onPull={props.onPull}
-            onPush={props.onPush}
+            onOpenSettings={props.onOpenGitHub}
           />
           <section className="side-card">
             <header><span><ArrowRight size={16} aria-hidden="true" /> Ações rápidas</span></header>

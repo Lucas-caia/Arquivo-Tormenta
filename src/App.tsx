@@ -14,7 +14,6 @@ import { UploadPage } from "./pages/UploadPage";
 import { getRouteDefinition } from "./routing/routes";
 import { useHashRoute } from "./routing/useHashRoute";
 import { useAccessibilitySettings } from "./settings/useAccessibilitySettings";
-
 export default function App() {
   function skipToContent(event: MouseEvent<HTMLAnchorElement>) {
     event.preventDefault();
@@ -27,10 +26,8 @@ export default function App() {
   const accessibility = useAccessibilitySettings();
   const arquivo = useArquivoTormenta();
   const showSearch = route === "dashboard" || route === "fichas" || route === "revisoes";
-
   function renderPage() {
     if (arquivo.loading) return <LoadingPage />;
-
     switch (route) {
       case "fichas":
         return (
@@ -93,7 +90,6 @@ export default function App() {
         );
     }
   }
-
   return (
     <>
       <a className="skip-link" href="#conteudo-principal" onClick={skipToContent}>Pular para o conteúdo</a>
@@ -105,14 +101,13 @@ export default function App() {
         showSearch={showSearch}
         footer={(
           <>
-            <span>Arquivo Tormenta RPG · v1.2.0 · modo privado</span>
+            <span>Arquivo Tormenta RPG · v1.2.1 · modo privado</span>
             <span>/data/fichas · {arquivo.stats.total} ficha(s)</span>
           </>
         )}
       >
         {renderPage()}
       </AppShell>
-
       {arquivo.revisao && (
         <ComparisonModal
           revisao={arquivo.revisao}

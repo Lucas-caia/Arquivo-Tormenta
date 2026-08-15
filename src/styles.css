@@ -1527,3 +1527,234 @@ tbody tr:last-child td {
   .detail-grid { grid-template-columns: minmax(0, 1fr); }
   .upload-panel { margin: 10px; min-height: 360px; padding: 25px 16px; }
 }
+
+/* GitHub synchronization settings */
+.git-settings-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(290px, 0.55fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.git-configuration-card > header,
+.git-sync-card > header,
+.git-preview-card > header {
+  min-height: 51px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 15px;
+  border-bottom: 1px solid var(--line);
+  font-size: 0.86rem;
+  font-weight: 750;
+}
+
+.git-configuration-card > header > span,
+.git-sync-card > header > span,
+.git-preview-card > header > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.git-config-form,
+.git-template-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  padding: 16px;
+}
+
+.git-template-grid {
+  padding-top: 0;
+}
+
+.git-field {
+  min-width: 0;
+  display: grid;
+  gap: 7px;
+}
+
+.git-field-wide {
+  grid-column: 1 / -1;
+}
+
+.git-field > span {
+  color: var(--text);
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.git-field > small {
+  color: var(--muted-2);
+  font-size: 0.66rem;
+  line-height: 1.5;
+}
+
+.git-field input,
+.git-field select {
+  width: 100%;
+  min-height: 40px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--text);
+  background: var(--bg-deep);
+}
+
+.git-scope-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.git-scope-options label {
+  cursor: pointer;
+}
+
+.git-scope-options input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.git-scope-options span {
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--muted);
+  background: var(--bg-deep);
+  font-size: 0.72rem;
+  font-weight: 750;
+}
+
+.git-scope-options input:checked + span {
+  color: var(--green);
+  border-color: color-mix(in srgb, var(--green), transparent 45%);
+  background: color-mix(in srgb, var(--green), transparent 90%);
+}
+
+.git-scope-options input:focus-visible + span {
+  box-shadow: var(--focus);
+}
+
+.commit-examples {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  padding: 0 16px 16px;
+}
+
+.commit-examples > div {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+  padding: 11px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: var(--card-soft);
+}
+
+.commit-examples span,
+.git-preview-commit > span {
+  color: var(--muted-2);
+  font-size: 0.65rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.commit-examples code,
+.git-preview-commit code {
+  overflow-wrap: anywhere;
+  color: var(--gold-strong);
+  font-size: 0.7rem;
+}
+
+.git-config-actions,
+.git-sync-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 9px;
+  padding: 0 16px 16px;
+  flex-wrap: wrap;
+}
+
+.git-sync-actions {
+  padding-top: 16px;
+}
+
+.git-unsaved-note {
+  margin: -6px 16px 16px;
+  color: var(--amber);
+  font-size: 0.68rem;
+}
+
+.git-preview-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 9px;
+  padding: 16px;
+}
+
+.git-preview-summary > div {
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: var(--card-soft);
+}
+
+.git-preview-summary span {
+  color: var(--muted-2);
+  font-size: 0.65rem;
+}
+
+.git-preview-summary strong {
+  font-size: 0.8rem;
+}
+
+.git-preview-commit {
+  display: grid;
+  gap: 7px;
+  margin: 0 16px 16px;
+  padding: 11px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: var(--bg-deep);
+}
+
+.git-preview-card .changed-files strong {
+  display: inline-block;
+  min-width: 24px;
+  color: var(--gold-strong);
+}
+
+@media (max-width: 1080px) {
+  .git-settings-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 720px) {
+  .git-config-form,
+  .git-template-grid,
+  .commit-examples,
+  .git-preview-summary {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .git-field-wide {
+    grid-column: auto;
+  }
+
+  .git-scope-options {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

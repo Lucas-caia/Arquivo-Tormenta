@@ -21,7 +21,6 @@ import {
   withSubmissionLock
 } from "./submissionStore.js";
 import type { DiscordSubmission } from "./types.js";
-
 export type Submitter = {
   id: string;
   name: string;
@@ -32,6 +31,9 @@ export type ReceiveSubmissionInput = {
   submitter: Submitter;
   guildId: string;
   submissionChannelId: string;
+  submittedAt?: string;
+  sourceMessageId?: string;
+  sourceAttachmentId?: string;
   config: DiscordBotConfig;
 };
 
@@ -43,7 +45,6 @@ export type AdminActor = {
 export type ImportSubmissionResult =
   | { kind: "imported"; submission: DiscordSubmission; result: UploadResponse }
   | { kind: "blocked"; submission: DiscordSubmission; signature: string };
-
 function addDays(iso: string, days: number) {
   const date = new Date(iso);
   date.setUTCDate(date.getUTCDate() + days);
@@ -59,12 +60,14 @@ function ensurePending(submission: DiscordSubmission) {
     );
   }
 }
-
 export async function receiveDiscordSubmission({
   arquivo,
   submitter,
   guildId,
   submissionChannelId,
+  submittedAt: receivedAt,
+  sourceMessageId,
+  sourceAttachmentId,
   config
 }: ReceiveSubmissionInput) {
   validatePdfUpload(arquivo, appConfig.maxPdfBytes);
@@ -78,9 +81,8 @@ export async function receiveDiscordSubmission({
       [`Protocolo existente: ${duplicate.protocol}.`]
     );
   }
-
   const id = createSubmissionId();
-  const submittedAt = nowIso();
+  const submittedAt = receivedAt ?? nowIso();
   const submission: DiscordSubmission = {
     id,
     protocol: createProtocol(id, new Date(submittedAt)),
@@ -95,9 +97,10 @@ export async function receiveDiscordSubmission({
     guildId,
     submissionChannelId,
     reviewChannelId: config.reviewChannelId,
+    sourceMessageId,
+    sourceAttachmentId,
     security: { status: "not-scanned" }
   };
-
   return saveSubmissionWithQuarantine(submission, arquivo.buffer);
 }
 
@@ -108,7 +111,6 @@ export async function cancelUnannouncedSubmission(submissionId: string) {
     await deleteSubmissionMetadata(submissionId);
   });
 }
-
 export async function attachReviewMessage(submissionId: string, messageId: string) {
   return withSubmissionLock(submissionId, async () => {
     const submission = await readSubmission(submissionId);
@@ -116,7 +118,6 @@ export async function attachReviewMessage(submissionId: string, messageId: strin
     return updateSubmission(updated);
   });
 }
-
 export async function importDiscordSubmission(
   submissionId: string,
   admin: AdminActor,
@@ -129,7 +130,6 @@ export async function importDiscordSubmission(
     const buffer = await readQuarantinedFile(submission.id);
     const scan = await scanBufferWithClamav(buffer, config.clamav);
     const scannedAt = nowIso();
-
     if (scan.status === "infected") {
       const blocked: DiscordSubmission = {
         ...submission,
@@ -149,13 +149,11 @@ export async function importDiscordSubmission(
       await deleteQuarantinedFile(submission.id);
       return { kind: "blocked", submission: blocked, signature: scan.signature };
     }
-
     const cleanSubmission: DiscordSubmission = {
       ...submission,
       security: { status: "clean", scannedAt }
     };
     await updateSubmission(cleanSubmission);
-
     const result = await importarFichaPdf({
       arquivo: {
         buffer,
@@ -171,7 +169,6 @@ export async function importDiscordSubmission(
         }
       }
     });
-
     const decidedAt = nowIso();
     const imported: DiscordSubmission = {
       ...cleanSubmission,
@@ -189,7 +186,6 @@ export async function importDiscordSubmission(
     return { kind: "imported", submission: imported, result };
   });
 }
-
 export async function discardDiscordSubmission(
   submissionId: string,
   admin: AdminActor
@@ -212,7 +208,6 @@ export async function discardDiscordSubmission(
     return discarded;
   });
 }
-
 export async function expireOldSubmissions(now = new Date()) {
   const submissions = await listSubmissions();
   let expired = 0;
@@ -224,7 +219,6 @@ export async function expireOldSubmissions(now = new Date()) {
     await withSubmissionLock(submission.id, async () => {
       const current = await readSubmission(submission.id);
       if (current.status !== "pending") return;
-
       const expiredAt = nowIso();
       await updateSubmission({
         ...current,

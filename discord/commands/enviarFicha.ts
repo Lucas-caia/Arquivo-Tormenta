@@ -8,9 +8,8 @@ import { AppError } from "../../server/errors.js";
 import { getSubmissionAuthorizationError } from "../authorization.js";
 import type { DiscordBotConfig } from "../config.js";
 import { downloadAttachment } from "../downloadAttachment.js";
-import { pendingReviewMessage } from "../components/submissionMessages.js";
+import { announceSubmissionForReview } from "../submissions/reviewChannel.js";
 import {
-  attachReviewMessage,
   cancelUnannouncedSubmission,
   receiveDiscordSubmission
 } from "../submissions/submissionService.js";
@@ -37,23 +36,6 @@ function errorMessage(error: unknown) {
   return "❌ Não foi possível receber a ficha. Tente novamente mais tarde.";
 }
 
-async function sendToReviewChannel(
-  client: Client,
-  submission: Awaited<ReturnType<typeof receiveDiscordSubmission>>,
-  config: DiscordBotConfig
-) {
-  const channel = await client.channels.fetch(config.reviewChannelId);
-  if (!channel?.isTextBased() || !("send" in channel)) {
-    throw new Error("DISCORD_REVIEW_CHANNEL_ID não aponta para um canal de texto.");
-  }
-
-  const message = await channel.send(pendingReviewMessage(submission));
-  await attachReviewMessage(submission.id, message.id).catch((error) => {
-    console.warn("Não foi possível registrar o ID da mensagem de revisão:", error);
-  });
-  return submission;
-}
-
 export async function handleEnviarFicha(
   interaction: ChatInputCommandInteraction,
   client: Client,
@@ -69,7 +51,6 @@ export async function handleEnviarFicha(
   }
 
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-
   try {
     const attachment = interaction.options.getAttachment("arquivo", true);
     const arquivo = await downloadAttachment(attachment);
@@ -83,16 +64,14 @@ export async function handleEnviarFicha(
       submissionChannelId: interaction.channelId,
       config
     });
-
     try {
-      await sendToReviewChannel(client, submission, config);
+      await announceSubmissionForReview(client, submission, config);
     } catch (error) {
       await cancelUnannouncedSubmission(submission.id).catch((cleanupError) => {
         console.error("Falha ao limpar submissão sem mensagem de revisão:", cleanupError);
       });
       throw error;
     }
-
     await interaction.editReply([
       "✅ **Ficha recebida!**",
       "",

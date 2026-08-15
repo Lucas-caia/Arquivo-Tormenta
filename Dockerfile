@@ -16,7 +16,7 @@ RUN npm install --omit=dev --omit=optional --no-audit --no-fund
 FROM node:22-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
-RUN apk add --no-cache git \
+RUN apk add --no-cache git openssh-client \
   && git config --global --add safe.directory /app
 COPY --from=production-deps /app/node_modules ./node_modules
 COPY --from=build /app/package.json ./package.json

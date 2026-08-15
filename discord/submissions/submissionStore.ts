@@ -4,7 +4,6 @@ import path from "node:path";
 import { conflict, notFound } from "../../server/errors.js";
 import { nowIso } from "../../server/utils.js";
 import type { DiscordSubmission } from "./types.js";
-
 const root = process.cwd();
 const dataDir = path.join(root, "data");
 const submissionsDir = path.join(dataDir, "submissions");
@@ -15,7 +14,6 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0
 const LOCK_TIMEOUT_MS = 5_000;
 const STALE_LOCK_MS = 30_000;
 const LOCK_RETRY_MS = 75;
-
 async function ensureDirectories() {
   await Promise.all([
     fs.mkdir(submissionsDir, { recursive: true }),
@@ -34,7 +32,6 @@ function assertSubmissionId(id: string) {
 function submissionPath(id: string) {
   return path.join(submissionsDir, `${assertSubmissionId(id)}.json`);
 }
-
 function quarantinePath(id: string) {
   return path.join(quarantineDir, `${assertSubmissionId(id)}.pending`);
 }
@@ -42,7 +39,6 @@ function quarantinePath(id: string) {
 function sleep(milliseconds: number) {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
-
 async function writeJsonAtomic(filePath: string, value: unknown) {
   const temporaryPath = `${filePath}.${process.pid}.${randomUUID()}.tmp`;
   try {
@@ -57,7 +53,6 @@ async function writeJsonAtomic(filePath: string, value: unknown) {
     throw error;
   }
 }
-
 async function readJson<T>(filePath: string) {
   const content = await fs.readFile(filePath, "utf8");
   return JSON.parse(content) as T;
@@ -75,7 +70,6 @@ export function createProtocol(id: string, date = new Date()) {
   const day = date.toISOString().slice(0, 10).replaceAll("-", "");
   return `AT-${day}-${id.slice(0, 8).toUpperCase()}`;
 }
-
 export async function saveSubmissionWithQuarantine(
   submission: DiscordSubmission,
   buffer: Buffer
@@ -94,7 +88,6 @@ export async function saveSubmissionWithQuarantine(
 
   return submission;
 }
-
 export async function readSubmission(id: string) {
   await ensureDirectories();
   try {
@@ -106,13 +99,11 @@ export async function readSubmission(id: string) {
     throw error;
   }
 }
-
 export async function updateSubmission(submission: DiscordSubmission) {
   await ensureDirectories();
   await writeJsonAtomic(submissionPath(submission.id), submission);
   return submission;
 }
-
 export async function readQuarantinedFile(id: string) {
   await ensureDirectories();
   try {
@@ -127,7 +118,6 @@ export async function readQuarantinedFile(id: string) {
     throw error;
   }
 }
-
 export async function deleteQuarantinedFile(id: string) {
   await ensureDirectories();
   await fs.rm(quarantinePath(id), { force: true });
@@ -137,7 +127,6 @@ export async function deleteSubmissionMetadata(id: string) {
   await ensureDirectories();
   await fs.rm(submissionPath(id), { force: true });
 }
-
 export async function listSubmissions() {
   await ensureDirectories();
   const files = await fs.readdir(submissionsDir);
@@ -148,11 +137,22 @@ export async function listSubmissions() {
 
   return Promise.all(ids.map((id) => readJson<DiscordSubmission>(submissionPath(id))));
 }
-
 export async function findPendingSubmissionByHash(hash: string) {
   const submissions = await listSubmissions();
   return submissions.find(
     (submission) => submission.status === "pending" && submission.sha256 === hash
+  ) ?? null;
+}
+
+export async function findSubmissionBySource(
+  messageId: string,
+  attachmentId: string
+) {
+  const submissions = await listSubmissions();
+  return submissions.find(
+    (submission) =>
+      submission.sourceMessageId === messageId
+      && submission.sourceAttachmentId === attachmentId
   ) ?? null;
 }
 
@@ -164,7 +164,6 @@ export async function withSubmissionLock<T>(
   const safeId = assertSubmissionId(id);
   const lockPath = path.join(locksDir, `${safeId}.lock`);
   const deadline = Date.now() + LOCK_TIMEOUT_MS;
-
   while (true) {
     try {
       const handle = await fs.open(lockPath, "wx");
@@ -178,7 +177,6 @@ export async function withSubmissionLock<T>(
     } catch (error) {
       const code = (error as NodeJS.ErrnoException).code;
       if (code !== "EEXIST") throw error;
-
       const stats = await fs.stat(lockPath).catch(() => null);
       if (stats && Date.now() - stats.mtimeMs > STALE_LOCK_MS) {
         await fs.rm(lockPath, { force: true }).catch(() => undefined);
@@ -192,7 +190,6 @@ export async function withSubmissionLock<T>(
           ["Aguarde alguns segundos e tente novamente."]
         );
       }
-
       await sleep(LOCK_RETRY_MS);
     }
   }
