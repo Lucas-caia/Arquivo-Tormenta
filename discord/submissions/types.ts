@@ -20,7 +20,6 @@ export type SubmissionDecision = {
   };
   result?: "nova" | "revisao" | "sem-alteracoes";
 };
-
 export type DiscordSubmission = {
   id: string;
   protocol: string;
@@ -39,6 +38,8 @@ export type DiscordSubmission = {
   submissionChannelId: string;
   reviewChannelId: string;
   reviewMessageId?: string;
+  sourceMessageId?: string;
+  sourceAttachmentId?: string;
   security: SubmissionSecurity;
   decision?: SubmissionDecision;
 };

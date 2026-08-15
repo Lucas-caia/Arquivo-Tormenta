@@ -32,7 +32,7 @@ A aplicação possui duas entradas para fichas:
                    PDF→JSON                     JSON            │
                                                     ▲            │
                                                     │            │
-Discord ─► Bot ─► SubmissionService ─► Quarentena ─► ClamAV ───┘
+Discord ─► Caixa de entrada ─► Bot/Sync ─► SubmissionService ─► Quarentena ─► ClamAV ───┘
 ```
 
 ## Frontend
@@ -75,7 +75,7 @@ As responsabilidades são separadas entre:
 - `parser.ts`: extração dos campos do PDF;
 - `diff.ts`: comparação entre a ficha atual e uma nova versão;
 - `storage.ts`: leitura, escrita, revisão e locks dos arquivos;
-- `git/`: configuração, autenticação SSH, preparação de commits e sincronização do acervo;
+- `git.ts`: sincronização do acervo versionado;
 - `validation.ts`: validações de IDs e arquivos.
 
 O backend também serve o build do frontend em produção.
@@ -138,38 +138,43 @@ A revisão pode ser aplicada ou descartada. O sistema impede a sobrescrita de um
 
 ## Integração com Discord
 
-O bot é um processo separado dentro do mesmo projeto e utiliza `discord.js`.
+O bot é um processo separado dentro do mesmo projeto e utiliza `discord.js`. O canal de submissões também funciona como uma **caixa de entrada durável**: o usuário pode publicar o PDF diretamente no canal mesmo quando o processo local está desligado, porque a mensagem e o anexo permanecem armazenados pelo Discord.
 
-O comando `/enviar-ficha` recebe o PDF no canal configurado e cria uma submissão. Nesse momento, o arquivo ainda não é enviado ao parser.
+Quando o bot inicia, recebe uma nova mensagem ou executa a reconciliação periódica, `channelInbox` consulta o histórico a partir do último checkpoint local. Cada anexo é identificado pelo ID da mensagem e do próprio anexo, evitando criar duas submissões para o mesmo item durante uma recuperação.
 
 ```text
-/enviar-ficha
-      ↓
-Validação inicial
-      ↓
-SubmissionService
-      ↓
-Quarentena
-      ↓
-Mensagem no canal administrativo
-      ↓
-[ Importar ficha ]  [ Descartar ]
+Usuário ─► Canal Discord ─► mensagem + PDF armazenados
+                              │
+                              │ bot disponível / recuperação
+                              ▼
+                         ChannelInbox ─► SubmissionService ─► Quarentena
+                                                               │
+                                                               ▼
+                                                    Canal administrativo
+                                                               │
+                                                   [ Importar ] [ Descartar ]
 ```
+
+O checkpoint da caixa de entrada fica em `data/submissions/.inbox-state.json`, fora do Git. Se o processo cair depois de criar uma submissão, a origem Discord gravada nos metadados permite reconhecer o anexo na próxima sincronização sem duplicá-lo. O comando `/enviar-ficha` continua disponível quando o bot está on-line e reutiliza o mesmo envio para o canal administrativo.
 
 O módulo é dividido em comandos, componentes, configuração, autorização, segurança e gerenciamento das submissões.
 
 ```text
 discord/
-├── commands/       slash commands
-├── components/     botões e mensagens
-├── security/       comunicação com ClamAV
-├── submissions/    fila, quarentena e decisões
+├── commands/              slash commands
+├── components/            botões e mensagens
+├── security/              comunicação com ClamAV
+├── submissions/
+│   ├── channelInbox.ts    sincronização do canal
+│   ├── inboxState.ts      checkpoint local
+│   ├── reviewChannel.ts   anúncio administrativo compartilhado
+│   └── ...                quarentena, fila e decisões
 ├── authorization.ts
 ├── config.ts
 └── bot.ts
 ```
 
-Somente usuários configurados como administradores podem importar ou descartar uma submissão.
+Somente usuários configurados como administradores podem importar ou descartar uma submissão. A indisponibilidade da sincronização não publica o painel nem move o processamento para o Discord: parser, ClamAV, revisão e armazenamento continuam locais.
 
 ## Quarentena e ClamAV
 
@@ -193,24 +198,20 @@ Submissões pendentes iguais são identificadas por SHA-256, e locks por submiss
 
 ## Git
 
-A integração Git é executada pelo backend através do Git CLI e utiliza um **repositório de sincronização isolado** em `runtime/git-sync`. Esse repositório é independente do `.git` usado no desenvolvimento do código.
+A integração Git é executada pelo backend através do Git CLI.
 
-A autenticação com o GitHub utiliza SSH. A chave privada é lida de `.secrets/github_deploy_key`, diretório ignorado pelo Git e montado como somente leitura no container. A chave não é armazenada na interface nem na configuração persistida.
-
-A configuração persistida em `runtime/git-settings.json` contém apenas dados não secretos: URL SSH do repositório, branch, grupos sincronizados, autor e padrões de mensagens de commit.
-
-Os grupos disponíveis para sincronização são:
+Somente os diretórios do acervo são preparados automaticamente para commit:
 
 ```text
 data/fichas
 data/revisoes
 ```
 
-O Push copia somente os grupos selecionados para o repositório de sincronização, compara as alterações, gera a mensagem de commit e exige uma prévia antes do envio. O Pull verifica primeiro se existem mudanças locais ainda não sincronizadas e, nesse caso, é bloqueado para evitar sobrescrita automática do acervo.
+A interface permite consultar o estado do repositório e executar `pull` e `push`. Dados temporários do Discord e arquivos em quarentena ficam fora desse fluxo.
 
 ## Execução
 
-A aplicação principal é executada em Docker com `data`, `runtime` e `.secrets` montados separadamente. O frontend compilado é servido pelo Express em `localhost:3333`.
+A aplicação principal é executada em Docker com o diretório `data` e o repositório Git montados no container. O frontend compilado é servido pelo Express em `localhost:3333`.
 
 O ClamAV é executado como um serviço separado no Docker Compose.
 
@@ -226,16 +227,11 @@ Máquina local
 │
 ├── Bot Discord
 │
-├── data/
-│   ├── fichas
-│   ├── revisoes
-│   ├── submissions
-│   └── quarantine
-├── runtime/
-│   ├── git-settings.json
-│   └── git-sync/
-└── .secrets/
-    └── github_deploy_key
+└── data/
+    ├── fichas
+    ├── revisoes
+    ├── submissions
+    └── quarantine
 ```
 
 ## Tipos compartilhados

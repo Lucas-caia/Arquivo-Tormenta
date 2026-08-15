@@ -3,6 +3,7 @@ import { handleSubmissionButton } from "./components/submissionActions.js";
 import { handleEnviarFicha, enviarFichaCommand } from "./commands/enviarFicha.js";
 import { loadDiscordBotConfig } from "./config.js";
 import { pingClamav } from "./security/clamdClient.js";
+import { syncSubmissionChannel } from "./submissions/channelInbox.js";
 import { expireOldSubmissions } from "./submissions/submissionService.js";
 
 async function registerGuildCommands(client: Client, guildId: string) {
@@ -36,25 +37,87 @@ async function logClamavStatus(config: ReturnType<typeof loadDiscordBotConfig>) 
 async function startBot() {
   loadLocalEnv();
   const config = loadDiscordBotConfig();
-  const client = new Client({ intents: [GatewayIntentBits.Guilds] });
+  const client = new Client({
+    intents: [
+      GatewayIntentBits.Guilds,
+      GatewayIntentBits.GuildMessages,
+      GatewayIntentBits.MessageContent
+    ]
+  });
+
+  let inboxQueue = Promise.resolve();
+  function enqueueInboxSync(reason: string) {
+    const run = inboxQueue.then(async () => {
+      const result = await syncSubmissionChannel(client, config);
+      if (result.discovered || result.retryPending) {
+        console.log(
+          `[Discord inbox:${reason}] ${result.processed}/${result.discovered} mensagem(ns) processada(s)`
+          + (result.retryPending ? "; nova tentativa ficará pendente." : ".")
+        );
+      }
+      return result;
+    });
+
+    inboxQueue = run.then(
+      () => undefined,
+      () => undefined
+    );
+    return run;
+  }
 
   client.once(Events.ClientReady, async (readyClient) => {
     console.log(`Bot conectado como ${readyClient.user.tag}.`);
-    try {
-      await registerGuildCommands(client, config.guildId);
-      const expired = await expireOldSubmissions();
-      if (expired) console.log(`${expired} submissão(ões) antiga(s) expiraram.`);
-      await logClamavStatus(config);
-      const cleanupTimer = setInterval(() => {
-        expireOldSubmissions().catch((error) => {
-          console.error("Falha ao expirar submissões antigas:", error);
-        });
-      }, 6 * 60 * 60 * 1000);
-      cleanupTimer.unref();
-      console.log("Arquivo Tormenta Discord está pronto para receber fichas.");
-    } catch (error) {
-      console.error("Falha na preparação do bot do Discord:", error);
+
+    await registerGuildCommands(client, config.guildId).catch((error) => {
+      console.error("Falha ao registrar os comandos do Discord:", error);
+    });
+
+    await expireOldSubmissions()
+      .then((expired) => {
+        if (expired) console.log(`${expired} submissão(ões) antiga(s) expiraram.`);
+      })
+      .catch((error) => {
+        console.error("Falha ao expirar submissões antigas na inicialização:", error);
+      });
+
+    await logClamavStatus(config);
+
+    await enqueueInboxSync("startup").catch((error) => {
+      console.error(
+        "A sincronização assíncrona do canal está indisponível. Slash commands e botões administrativos continuam ativos:",
+        error
+      );
+    });
+
+    const cleanupTimer = setInterval(() => {
+      expireOldSubmissions().catch((error) => {
+        console.error("Falha ao expirar submissões antigas:", error);
+      });
+    }, 6 * 60 * 60 * 1000);
+    cleanupTimer.unref();
+
+    const reconciliationTimer = setInterval(() => {
+      enqueueInboxSync("reconciliation").catch((error) => {
+        console.error("Falha ao reconciliar o canal de submissões:", error);
+      });
+    }, 15 * 60 * 1000);
+    reconciliationTimer.unref();
+
+    console.log("Arquivo Tormenta Discord está pronto para receber fichas.");
+  });
+
+  client.on(Events.MessageCreate, (message) => {
+    if (
+      message.author.bot
+      || message.guildId !== config.guildId
+      || message.channelId !== config.submissionChannelId
+    ) {
+      return;
     }
+
+    enqueueInboxSync("message-create").catch((error) => {
+      console.error("Falha ao sincronizar nova mensagem de submissão:", error);
+    });
   });
 
   client.on(Events.InteractionCreate, async (interaction) => {
@@ -74,7 +137,6 @@ async function startBot() {
     client.destroy();
     process.exit(0);
   }
-
   process.once("SIGINT", shutdown);
   process.once("SIGTERM", shutdown);
 

@@ -2,6 +2,7 @@
 
 ## 1.2.1
 
+- Enviar fichas agora funciona em qualquer momento, mesmo sem servidor funcionando.
 - Reformulação da funcionalidade do GitHub
 
 ## 1.2.0
