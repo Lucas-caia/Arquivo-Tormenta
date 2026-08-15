@@ -14,7 +14,6 @@ import { UploadPage } from "./pages/UploadPage";
 import { getRouteDefinition } from "./routing/routes";
 import { useHashRoute } from "./routing/useHashRoute";
 import { useAccessibilitySettings } from "./settings/useAccessibilitySettings";
-
 export default function App() {
   function skipToContent(event: MouseEvent<HTMLAnchorElement>) {
     event.preventDefault();
@@ -27,10 +26,8 @@ export default function App() {
   const accessibility = useAccessibilitySettings();
   const arquivo = useArquivoTormenta();
   const showSearch = route === "dashboard" || route === "fichas" || route === "revisoes";
-
   function renderPage() {
     if (arquivo.loading) return <LoadingPage />;
-
     switch (route) {
       case "fichas":
         return (
@@ -58,17 +55,10 @@ export default function App() {
         return (
           <GitHubPage
             status={arquivo.git}
-            settings={arquivo.gitConfig}
-            branches={arquivo.gitBranches}
-            preview={arquivo.gitPreview}
             busy={arquivo.gitBusy}
             onRefresh={arquivo.handleRefreshGit}
-            onSave={arquivo.handleSaveGitSettings}
-            onVerify={arquivo.handleVerifyGit}
             onPull={arquivo.handlePull}
-            onPreparePush={arquivo.handlePreparePush}
-            onConfirmPush={arquivo.handleConfirmPush}
-            onCancelPush={arquivo.handleCancelPush}
+            onPush={arquivo.handlePush}
           />
         );
       case "configuracoes":
@@ -95,12 +85,11 @@ export default function App() {
             onApproveAll={arquivo.handleApproveAll}
             onRefreshGit={arquivo.handleRefreshGit}
             onPull={arquivo.handlePull}
-            onOpenGitHub={() => { window.location.hash = "#/github"; }}
+            onPush={arquivo.handlePush}
           />
         );
     }
   }
-
   return (
     <>
       <a className="skip-link" href="#conteudo-principal" onClick={skipToContent}>Pular para o conteúdo</a>
@@ -112,14 +101,13 @@ export default function App() {
         showSearch={showSearch}
         footer={(
           <>
-            <span>Arquivo Tormenta RPG · v1.2.0 · modo privado</span>
+            <span>Arquivo Tormenta RPG · v1.2.1 · modo privado</span>
             <span>/data/fichas · {arquivo.stats.total} ficha(s)</span>
           </>
         )}
       >
         {renderPage()}
       </AppShell>
-
       {arquivo.revisao && (
         <ComparisonModal
           revisao={arquivo.revisao}

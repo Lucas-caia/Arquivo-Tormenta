@@ -1,6 +1,6 @@
 {
   "name": "arquivo-tormenta-rpg",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "private": true,
   "type": "module",
   "scripts": {
@@ -8,7 +8,7 @@
     "build": "vite build && tsc -p tsconfig.server.json",
     "start": "node dist-server/server/server.js",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.server.json --noEmit",
-    "test": "tsx --test server/*.test.ts server/git/*.test.ts discord/*.test.ts discord/security/*.test.ts discord/submissions/*.test.ts",
+    "test": "tsx --test server/*.test.ts discord/*.test.ts discord/security/*.test.ts discord/submissions/*.test.ts",
     "check": "npm run typecheck && npm run test && vite build",
     "dev:web": "vite --host 0.0.0.0",
     "dev:server": "tsx watch server/server.ts",

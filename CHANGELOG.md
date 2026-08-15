@@ -2,6 +2,7 @@
 
 ## 1.2.1
 
+- Opção de deixar o site em preto e branco
 - Enviar fichas agora funciona em qualquer momento, mesmo sem servidor funcionando.
 - Reformulação da funcionalidade do GitHub
 
