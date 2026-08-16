@@ -38,3 +38,23 @@ test("gera mensagem específica para ficha atualizada", async () => {
     await fs.rm(root, { recursive: true, force: true });
   }
 });
+
+
+test("fingerprint muda quando o conteúdo preparado muda, mesmo com os mesmos caminhos", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "tormenta-git-fingerprint-"));
+  try {
+    await fs.mkdir(path.join(root, "fichas"), { recursive: true });
+    await fs.writeFile(path.join(root, "fichas", "blek.json"), JSON.stringify({
+      nome: "Blek",
+      historico: { versao: 5 }
+    }));
+
+    const changes = [{ status: "M", path: "data/fichas/blek.json" }];
+    const first = await buildGitPreview(settings, changes, root, "base-a\\nblob-1");
+    const second = await buildGitPreview(settings, changes, root, "base-a\\nblob-2");
+
+    assert.notEqual(first.fingerprint, second.fingerprint);
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});

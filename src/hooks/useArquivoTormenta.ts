@@ -274,7 +274,7 @@ export function useArquivoTormenta() {
 
   const handlePull = useCallback(async () => {
     const confirmed = window.confirm(
-      "O Pull só será executado se não houver alterações locais pendentes nos grupos selecionados. Deseja continuar?"
+      "O Pull compara o acervo local com o GitHub e só aplica mudanças quando puder preservar seus arquivos. Deseja continuar?"
     );
     if (!confirmed) return;
 

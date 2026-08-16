@@ -51,10 +51,6 @@ export function GitHubPage({
     setDraft(settings);
   }, [settings]);
 
-  useEffect(() => () => {
-    onCancelPush();
-  }, [onCancelPush]);
-
   if (!draft) {
     return (
       <section className="wide-card empty-state">
@@ -234,12 +230,12 @@ export function GitHubPage({
               <Download size={14} aria-hidden="true" /> Pull seguro
             </button>
             <button className="button primary" disabled={busy || !canSync} onClick={onPreparePush}>
-              <Send size={14} aria-hidden="true" /> {preview ? "Atualizar prévia" : "Preparar Push"}
+              <Send size={14} aria-hidden="true" /> Preparar Push
             </button>
           </div>
           <p className="info-line">
             <LockKeyhole size={14} aria-hidden="true" />
-            O Pull é bloqueado quando existem alterações locais não sincronizadas. O Push exige uma prévia antes da confirmação.
+            O Pull preserva alterações locais quando não existe conflito no mesmo arquivo. O Push exige uma prévia antes da confirmação.
           </p>
         </section>
 

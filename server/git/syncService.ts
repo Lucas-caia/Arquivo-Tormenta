@@ -10,6 +10,7 @@ import { AppError, badRequest, conflict } from "../errors.js";
 import { buildGitPreview } from "./changeSummary.js";
 import { isDeployKeyConfigured, runGit, withSshEnvironment } from "./command.js";
 import { markGitVerified, publicGitSettings, readGitSettings, saveGitSettings } from "./settings.js";
+import { compareRemoteScopeChanges } from "./syncPlan.js";
 import type { GitSettingsInternal, GitSyncScope, PreparedGitChange } from "./types.js";
 
 const root = process.cwd();
@@ -73,6 +74,16 @@ async function writeSyncMarker(settings: GitSettingsInternal) {
   await runGit(["config", "user.email", settings.autor.email], { cwd: syncRepo });
 }
 
+async function createSyncRepository(settings: GitSettingsInternal, env: NodeJS.ProcessEnv) {
+  await fs.rm(syncRepo, { recursive: true, force: true });
+  await fs.mkdir(syncRepo, { recursive: true });
+  await runGit(["init"], { cwd: syncRepo });
+  await runGit(["remote", "add", "origin", settings.remoteUrl], { cwd: syncRepo });
+  await fetchTargetBranch(settings, env);
+  await runGit(["checkout", "-B", syncBranch, "FETCH_HEAD"], { cwd: syncRepo });
+  await writeSyncMarker(settings);
+}
+
 async function initializeRepository(settings: GitSettingsInternal, env: NodeJS.ProcessEnv) {
   requireConfigured(settings);
   await fs.mkdir(runtimeRoot, { recursive: true });
@@ -86,20 +97,21 @@ async function initializeRepository(settings: GitSettingsInternal, env: NodeJS.P
     : ["", ""];
 
   if (!initialized || storedRemote !== settings.remoteUrl || storedBranch !== settings.branch) {
-    await fs.rm(syncRepo, { recursive: true, force: true });
-    await fs.mkdir(syncRepo, { recursive: true });
-    await runGit(["init"], { cwd: syncRepo });
-    await runGit(["remote", "add", "origin", settings.remoteUrl], { cwd: syncRepo });
-    await fetchTargetBranch(settings, env);
-    await runGit(["checkout", "-B", syncBranch, "FETCH_HEAD"], { cwd: syncRepo });
-    await writeSyncMarker(settings);
+    await createSyncRepository(settings, env);
     return;
   }
 
-  await runGit(["reset", "--hard", "HEAD"], { cwd: syncRepo });
-  await runGit(["clean", "-fd"], { cwd: syncRepo });
-  await runGit(["remote", "set-url", "origin", settings.remoteUrl], { cwd: syncRepo });
-  await writeSyncMarker(settings);
+  try {
+    // runtime/git-sync é apenas um espelho operacional. Se o estado interno ficar
+    // inconsistente, preferimos reconstruí-lo a propagar um deadlock para a interface.
+    await runGit(["rev-parse", "--verify", "HEAD"], { cwd: syncRepo });
+    await runGit(["reset", "--hard", "HEAD"], { cwd: syncRepo });
+    await runGit(["clean", "-fd"], { cwd: syncRepo });
+    await runGit(["remote", "set-url", "origin", settings.remoteUrl], { cwd: syncRepo });
+    await writeSyncMarker(settings);
+  } catch {
+    await createSyncRepository(settings, env);
+  }
 }
 
 async function fetchTargetBranch(settings: GitSettingsInternal, env: NodeJS.ProcessEnv) {
@@ -122,32 +134,6 @@ async function remoteBranches(settings: GitSettingsInternal, env: NodeJS.Process
     .sort((a, b) => a.localeCompare(b));
 }
 
-async function replaceDirectory(source: string, destination: string) {
-  const temporary = `${destination}.git-sync-${process.pid}-${Date.now()}`;
-  const backup = `${destination}.git-backup-${process.pid}-${Date.now()}`;
-  await fs.rm(temporary, { recursive: true, force: true });
-  await fs.mkdir(temporary, { recursive: true });
-
-  try {
-    await fs.cp(source, temporary, { recursive: true, force: true }).catch(async (error) => {
-      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-    });
-    await fs.rename(destination, backup).catch(async (error) => {
-      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-    });
-    await fs.rename(temporary, destination);
-    await fs.rm(backup, { recursive: true, force: true });
-  } catch (error) {
-    await fs.rm(temporary, { recursive: true, force: true }).catch(() => undefined);
-    const destinationExists = await fs.stat(destination).then(() => true).catch(() => false);
-    const backupExists = await fs.stat(backup).then(() => true).catch(() => false);
-    if (!destinationExists && backupExists) {
-      await fs.rename(backup, destination).catch(() => undefined);
-    }
-    throw error;
-  }
-}
-
 async function copyLocalScopesIntoRepo(settings: GitSettingsInternal) {
   for (const scope of Object.keys(scopePaths) as GitSyncScope[]) {
     if (!settings.escopos[scope]) continue;
@@ -159,14 +145,6 @@ async function copyLocalScopesIntoRepo(settings: GitSettingsInternal) {
     await fs.cp(source, destination, { recursive: true, force: true }).catch(async (error) => {
       if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
     });
-  }
-}
-
-async function copyRepoScopesIntoLocal(settings: GitSettingsInternal) {
-  for (const scope of Object.keys(scopePaths) as GitSyncScope[]) {
-    if (!settings.escopos[scope]) continue;
-    const relativePath = scopePaths[scope];
-    await replaceDirectory(path.join(syncRepo, relativePath), path.join(root, relativePath));
   }
 }
 
@@ -198,36 +176,167 @@ async function stagedChanges(settings: GitSettingsInternal): Promise<PreparedGit
     .filter((change) => Boolean(change.path));
 }
 
-async function resetWorkingTree() {
-  await runGit(["reset", "--hard", "HEAD"], { cwd: syncRepo });
+
+async function applyRepoPathsIntoLocal(pathsToApply: string[]) {
+  for (const relativePath of pathsToApply) {
+    const normalized = relativePath.replace(/\\/g, "/");
+    const source = path.join(syncRepo, normalized);
+    const destination = path.join(root, normalized);
+    const exists = await fs.stat(source).then(() => true).catch(() => false);
+
+    if (!exists) {
+      await fs.rm(destination, { recursive: true, force: true });
+      continue;
+    }
+
+    await fs.mkdir(path.dirname(destination), { recursive: true });
+    await fs.cp(source, destination, { recursive: true, force: true });
+  }
+}
+
+async function stagedFingerprintContext(settings: GitSettingsInternal, baseRef: string) {
+  const paths = selectedPaths(settings);
+  const raw = await runGit(
+    ["diff", "--cached", "--raw", "--full-index", "--no-renames", "--", ...paths],
+    { cwd: syncRepo }
+  );
+  return `${baseRef}\n${raw}`;
+}
+
+
+function isRemoteRace(error: unknown) {
+  if (!(error instanceof AppError) || error.code !== "GIT_COMMAND_FAILED") return false;
+  const detail = [error.message, ...error.details].join("\n");
+  return /non-fast-forward|fetch first|rejected|stale info/i.test(detail);
+}
+
+async function resetToRef(ref: string) {
+  await runGit(["reset", "--hard", ref], { cwd: syncRepo });
   await runGit(["clean", "-fd"], { cwd: syncRepo });
 }
 
-async function preparePushInternal(settings: GitSettingsInternal, env: NodeJS.ProcessEnv, keepPrepared: boolean) {
-  await initializeRepository(settings, env);
-  const baseline = await runGit(["rev-parse", "HEAD"], { cwd: syncRepo });
+async function changedSelectedPathsBetweenRefs(
+  settings: GitSettingsInternal,
+  fromRef: string,
+  toRef: string
+) {
+  if (fromRef === toRef) return [];
+  const paths = selectedPaths(settings);
+  const output = await runGit(
+    ["diff", "--name-only", "--no-renames", fromRef, toRef, "--", ...paths],
+    { cwd: syncRepo }
+  );
+
+  return output
+    .split("\n")
+    .map((line) => line.trim().replace(/\\/g, "/"))
+    .filter(Boolean);
+}
+
+async function localChangesAgainstRef(settings: GitSettingsInternal, ref: string) {
+  await resetToRef(ref);
   await copyLocalScopesIntoRepo(settings);
   await stageSelectedScopes(settings);
-  const changes = await stagedChanges(settings);
+  return stagedChanges(settings);
+}
+
+async function preparePushInternal(
+  settings: GitSettingsInternal,
+  env: NodeJS.ProcessEnv,
+  keepPrepared: boolean
+) {
+  await initializeRepository(settings, env);
+  const baseline = await runGit(["rev-parse", "HEAD"], { cwd: syncRepo });
+
+  let localChanges: PreparedGitChange[];
+  try {
+    localChanges = await localChangesAgainstRef(settings, baseline);
+  } finally {
+    await resetToRef(baseline);
+  }
+
   await fetchTargetBranch(settings, env);
   const remoteHead = await runGit(["rev-parse", remoteTrackingRef], { cwd: syncRepo });
+  let baseForPush = baseline;
 
   if (remoteHead !== baseline) {
-    await resetWorkingTree();
-    throw conflict(
-      "GIT_REMOTE_CHANGED",
-      "O repositório remoto mudou desde a última sincronização.",
-      ["Faça Pull antes de preparar um novo Push. Se houver mudanças locais, resolva-as antes de substituir dados."]
+    const remoteScopeChanges = await changedSelectedPathsBetweenRefs(
+      settings,
+      baseline,
+      remoteHead
     );
+
+    if (remoteScopeChanges.length) {
+      let changesAgainstRemote: PreparedGitChange[];
+      try {
+        changesAgainstRemote = await localChangesAgainstRef(settings, remoteHead);
+      } finally {
+        await resetToRef(baseline);
+      }
+
+      if (!changesAgainstRemote.length) {
+        // O conteúdo local já é exatamente igual ao acervo remoto. Isso recupera
+        // situações em que o Push terminou, mas a referência operacional ficou antiga.
+        await resetToRef(remoteHead);
+        return buildGitPreview(settings, [], dataRoot, remoteHead);
+      }
+
+      const { conflicts, remotePendingLocally } = compareRemoteScopeChanges(
+        remoteScopeChanges,
+        localChanges,
+        changesAgainstRemote
+      );
+
+      if (conflicts.length) {
+        throw conflict(
+          "GIT_DATA_DIVERGED",
+          "O acervo local e o remoto alteraram os mesmos arquivos.",
+          [
+            "Nenhum lado foi sobrescrito.",
+            `Arquivos em conflito: ${conflicts.slice(0, 5).join(", ")}${conflicts.length > 5 ? "…" : ""}`
+          ]
+        );
+      }
+
+      if (remotePendingLocally.length) {
+        // Há alterações remotas reais em arquivos que o usuário não modificou localmente.
+        // O Pull seguro consegue mesclá-las sem descartar as mudanças locais em outros
+        // arquivos; por isso não criamos um deadlock Push <-> Pull.
+        throw conflict(
+          "GIT_REMOTE_DATA_CHANGED",
+          "Há alterações remotas que ainda precisam ser incorporadas ao acervo local.",
+          [
+            "Use Pull seguro. Alterações locais em outros arquivos serão preservadas.",
+            `Arquivos remotos: ${remotePendingLocally.slice(0, 5).join(", ")}${remotePendingLocally.length > 5 ? "…" : ""}`
+          ]
+        );
+      }
+
+      // Todas as alterações de dados feitas remotamente já estão presentes no acervo
+      // local. Avançamos a base e preparamos somente as mudanças adicionais locais.
+      baseForPush = remoteHead;
+    } else {
+      // O repositório avançou apenas em código, documentação ou outros arquivos fora
+      // dos escopos do Arquivo Tormenta. Isso nunca deve bloquear o Push das fichas.
+      baseForPush = remoteHead;
+    }
   }
 
+  const changes = await localChangesAgainstRef(settings, baseForPush);
   if (!changes.length) {
-    await resetWorkingTree();
-    return buildGitPreview(settings, [], dataRoot);
+    await resetToRef(baseForPush);
+    return buildGitPreview(settings, [], dataRoot, baseForPush);
   }
 
-  const preview = await buildGitPreview(settings, changes, dataRoot);
-  if (!keepPrepared) await resetWorkingTree();
+  const fingerprintContext = await stagedFingerprintContext(settings, baseForPush);
+  const preview = await buildGitPreview(
+    settings,
+    changes,
+    dataRoot,
+    fingerprintContext
+  );
+
+  if (!keepPrepared) await resetToRef(baseForPush);
   return preview;
 }
 
@@ -320,13 +429,17 @@ export async function pushRepository(expectedFingerprint: string): Promise<GitAc
   requireConfigured(settings);
 
   return withSshEnvironment(async (env) => {
-    const baseline = await (async () => {
-      await initializeRepository(settings, env);
-      return runGit(["rev-parse", "HEAD"], { cwd: syncRepo });
-    })();
+    await initializeRepository(settings, env);
+    const initialBase = await runGit(["rev-parse", "HEAD"], { cwd: syncRepo });
+    let recoveryBase = initialBase;
 
     try {
       const preview = await preparePushInternal(settings, env, true);
+      // preparePushInternal pode avançar a base quando o remoto mudou apenas fora dos
+      // escopos sincronizados. Em qualquer falha posterior, voltamos para essa base
+      // segura, e não para um commit antigo.
+      recoveryBase = await runGit(["rev-parse", "HEAD"], { cwd: syncRepo });
+
       if (!preview.total) {
         return {
           sucesso: true,
@@ -336,7 +449,7 @@ export async function pushRepository(expectedFingerprint: string): Promise<GitAc
         };
       }
       if (preview.fingerprint !== expectedFingerprint) {
-        await resetWorkingTree();
+        await resetToRef(recoveryBase);
         throw conflict(
           "GIT_PREVIEW_STALE",
           "As alterações mudaram depois da prévia.",
@@ -357,8 +470,17 @@ export async function pushRepository(expectedFingerprint: string): Promise<GitAc
         status: await getGitStatus()
       };
     } catch (error) {
-      await runGit(["reset", "--hard", baseline], { cwd: syncRepo }).catch(() => undefined);
+      await runGit(["reset", "--hard", recoveryBase], { cwd: syncRepo }).catch(() => undefined);
       await runGit(["clean", "-fd"], { cwd: syncRepo }).catch(() => undefined);
+
+      if (isRemoteRace(error)) {
+        throw conflict(
+          "GIT_REMOTE_CHANGED_DURING_PUSH",
+          "O repositório remoto mudou enquanto o Push estava sendo preparado.",
+          ["Atualize a prévia e confirme novamente. Nenhuma alteração local foi descartada."]
+        );
+      }
+
       throw error;
     }
   });
@@ -371,22 +493,26 @@ export async function pullRepository(): Promise<GitActionResponse> {
   return withSshEnvironment(async (env) => {
     await initializeRepository(settings, env);
     const baseline = await runGit(["rev-parse", "HEAD"], { cwd: syncRepo });
-    await copyLocalScopesIntoRepo(settings);
-    await stageSelectedScopes(settings);
-    const localChanges = await stagedChanges(settings);
-    await resetWorkingTree();
 
-    if (localChanges.length) {
-      throw conflict(
-        "GIT_LOCAL_CHANGES",
-        "Existem alterações locais ainda não sincronizadas.",
-        ["Prepare um Push antes do Pull. O Arquivo Tormenta não sobrescreve alterações locais automaticamente."]
-      );
+    let localChanges: PreparedGitChange[];
+    try {
+      localChanges = await localChangesAgainstRef(settings, baseline);
+    } finally {
+      await resetToRef(baseline);
     }
 
     await fetchTargetBranch(settings, env);
     const remoteHead = await runGit(["rev-parse", remoteTrackingRef], { cwd: syncRepo });
+
     if (remoteHead === baseline) {
+      if (localChanges.length) {
+        throw conflict(
+          "GIT_LOCAL_CHANGES",
+          "Existem alterações locais ainda não sincronizadas.",
+          ["Prepare um Push antes do Pull. O remoto não possui mudanças novas para incorporar."]
+        );
+      }
+
       return {
         sucesso: true,
         mensagem: "O acervo já está atualizado.",
@@ -395,13 +521,76 @@ export async function pullRepository(): Promise<GitActionResponse> {
       };
     }
 
-    await runGit(["reset", "--hard", remoteHead], { cwd: syncRepo });
-    await copyRepoScopesIntoLocal(settings);
+    const remoteScopeChanges = await changedSelectedPathsBetweenRefs(
+      settings,
+      baseline,
+      remoteHead
+    );
+
+    if (!remoteScopeChanges.length) {
+      // Commits de código/documentação não devem interferir na sincronização das fichas.
+      await resetToRef(remoteHead);
+      await markGitVerified();
+      return {
+        sucesso: true,
+        mensagem: localChanges.length
+          ? "Referência do GitHub atualizada sem alterar o acervo local."
+          : "O acervo já está atualizado.",
+        detalhes: localChanges.length
+          ? "As alterações locais de fichas/revisões foram preservadas e continuam prontas para Push."
+          : "O repositório remoto mudou apenas fora dos dados sincronizados.",
+        status: await getGitStatus()
+      };
+    }
+
+    let changesAgainstRemote: PreparedGitChange[];
+    try {
+      changesAgainstRemote = await localChangesAgainstRef(settings, remoteHead);
+    } finally {
+      await resetToRef(baseline);
+    }
+
+    if (!changesAgainstRemote.length) {
+      await resetToRef(remoteHead);
+      await markGitVerified();
+      return {
+        sucesso: true,
+        mensagem: "Sincronização reconciliada com o GitHub.",
+        detalhes: "O acervo local já contém os mesmos dados da branch remota.",
+        status: await getGitStatus()
+      };
+    }
+
+    const { conflicts } = compareRemoteScopeChanges(
+      remoteScopeChanges,
+      localChanges,
+      changesAgainstRemote
+    );
+
+    if (conflicts.length) {
+      throw conflict(
+        "GIT_DATA_DIVERGED",
+        "O acervo local e o remoto alteraram os mesmos arquivos.",
+        [
+          "O Pull foi cancelado para não sobrescrever nenhuma ficha.",
+          `Arquivos em conflito: ${conflicts.slice(0, 5).join(", ")}${conflicts.length > 5 ? "…" : ""}`
+        ]
+      );
+    }
+
+    // Não existe conflito nos mesmos arquivos. Aplicamos somente os caminhos que
+    // mudaram remotamente, preservando quaisquer fichas/revisões locais alteradas em
+    // outros arquivos. Depois avançamos a base interna para o HEAD remoto atual.
+    await resetToRef(remoteHead);
+    await applyRepoPathsIntoLocal(remoteScopeChanges);
     await markGitVerified();
+
     return {
       sucesso: true,
-      mensagem: "Pull concluído com sucesso.",
-      detalhes: `Dados atualizados a partir de ${settings.branch}.`,
+      mensagem: "Pull concluído com segurança.",
+      detalhes: localChanges.length
+        ? "Alterações remotas foram incorporadas sem descartar mudanças locais em outros arquivos."
+        : `Dados atualizados a partir de ${settings.branch}.`,
       status: await getGitStatus()
     };
   });
