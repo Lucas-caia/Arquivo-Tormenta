@@ -1,0 +1,851 @@
+.mesa-page {
+  display: grid;
+  gap: 14px;
+}
+
+.mesa-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--red), transparent 45%);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--red), transparent 92%);
+  color: var(--text);
+}
+
+.mesa-layout {
+  display: grid;
+  grid-template-columns: minmax(260px, 310px) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.mesa-catalog,
+.mesa-workspace {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--card);
+  box-shadow: 0 12px 38px rgba(0, 0, 0, 0.12);
+}
+
+.mesa-catalog {
+  position: sticky;
+  top: 18px;
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 96px);
+  overflow: hidden;
+}
+
+.mesa-catalog-header {
+  padding: 18px 18px 12px;
+}
+
+.mesa-catalog-header h2,
+.mesa-workspace-header h1 {
+  margin: 5px 0 4px;
+  color: var(--text);
+  line-height: 1.15;
+}
+
+.mesa-catalog-header h2 {
+  font-size: 1.02rem;
+}
+
+.mesa-catalog-header p,
+.mesa-workspace-header p {
+  margin: 0;
+  color: var(--muted-2);
+  font-size: 0.82rem;
+}
+
+.mesa-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--gold-strong);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.mesa-search {
+  min-height: 40px;
+  margin: 0 12px 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--bg-deep);
+  color: var(--muted-2);
+}
+
+.mesa-search:focus-within {
+  border-color: var(--gold);
+  box-shadow: var(--focus);
+}
+
+.mesa-search input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text);
+  font-size: 0.84rem;
+}
+
+.mesa-search input::placeholder {
+  color: var(--muted-2);
+}
+
+.mesa-search button {
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  background: transparent;
+  color: var(--muted-2);
+  cursor: pointer;
+}
+
+.mesa-catalog-count {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 0 15px 9px;
+  color: var(--muted-2);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.mesa-catalog-list {
+  overflow-y: auto;
+  padding: 0 8px 10px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line) transparent;
+}
+
+.mesa-catalog-item {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) 30px;
+  align-items: center;
+  gap: 9px;
+  padding: 9px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  transition: background 140ms ease, border-color 140ms ease;
+}
+
+.mesa-catalog-item:hover:not(:disabled) {
+  border-color: var(--line);
+  background: var(--card-soft);
+}
+
+.mesa-catalog-item.selected {
+  border-color: color-mix(in srgb, var(--green), transparent 65%);
+  background: color-mix(in srgb, var(--green), transparent 92%);
+  opacity: 1;
+}
+
+.mesa-catalog-icon,
+.mesa-character-icon {
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--card-soft);
+  color: var(--gold-strong);
+}
+
+.mesa-catalog-icon {
+  width: 34px;
+  height: 34px;
+}
+
+.mesa-catalog-copy {
+  min-width: 0;
+  display: grid;
+  gap: 1px;
+}
+
+.mesa-catalog-copy strong,
+.mesa-catalog-copy small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mesa-catalog-copy strong {
+  font-size: 0.82rem;
+}
+
+.mesa-catalog-copy small {
+  color: var(--muted-2);
+  font-size: 0.7rem;
+}
+
+.mesa-catalog-copy .mesa-player-name {
+  color: var(--muted);
+}
+
+.mesa-add-indicator {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  color: var(--gold-strong);
+}
+
+.mesa-catalog-item.selected .mesa-add-indicator {
+  color: var(--green);
+}
+
+.mesa-mini-loader {
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--line);
+  border-top-color: var(--gold-strong);
+  border-radius: 50%;
+  animation: mesa-spin 700ms linear infinite;
+}
+
+@keyframes mesa-spin {
+  to { transform: rotate(360deg); }
+}
+
+.mesa-catalog-empty {
+  min-height: 180px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 6px;
+  padding: 22px;
+  color: var(--muted-2);
+  text-align: center;
+}
+
+.mesa-catalog-empty strong {
+  color: var(--text);
+  font-size: 0.85rem;
+}
+
+.mesa-catalog-empty span {
+  font-size: 0.75rem;
+}
+
+.mesa-workspace {
+  min-width: 0;
+  min-height: 560px;
+  padding: 18px;
+}
+
+.mesa-workspace-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 2px 2px 16px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.mesa-workspace-header h1 {
+  font-size: 1.35rem;
+}
+
+.mesa-workspace-header p {
+  max-width: 760px;
+}
+
+.mesa-clear-button {
+  flex: 0 0 auto;
+  min-height: 36px;
+  padding: 7px 10px;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.mesa-character-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(330px, 1fr));
+  gap: 14px;
+  padding-top: 16px;
+  align-items: start;
+}
+
+.mesa-character-card {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  background: var(--bg-deep);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.1);
+}
+
+.mesa-character-header {
+  min-height: 82px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px;
+  border-bottom: 1px solid var(--line-soft);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--card-soft), transparent 18%), transparent);
+}
+
+.mesa-character-identity {
+  min-width: 0;
+  display: flex;
+  gap: 10px;
+}
+
+.mesa-character-icon {
+  width: 38px;
+  height: 38px;
+  flex: 0 0 auto;
+}
+
+.mesa-character-identity > div {
+  min-width: 0;
+}
+
+.mesa-character-title-line {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.mesa-character-header h2 {
+  margin: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 1rem;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mesa-character-header p,
+.mesa-character-header small {
+  display: block;
+  margin: 3px 0 0;
+  color: var(--muted-2);
+  font-size: 0.72rem;
+}
+
+.mesa-character-actions {
+  display: flex;
+  gap: 5px;
+  flex: 0 0 auto;
+}
+
+.mesa-remove-button:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--red), transparent 35%);
+  color: var(--red);
+  background: color-mix(in srgb, var(--red), transparent 92%);
+}
+
+.mesa-vitals {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 7px;
+  padding: 11px 12px 9px;
+}
+
+.mesa-vital {
+  min-width: 0;
+  padding: 9px 8px;
+  border: 1px solid var(--line-soft);
+  border-radius: 9px;
+  background: var(--card-soft);
+}
+
+.mesa-vital span {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--muted-2);
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.mesa-vital strong {
+  display: block;
+  margin-top: 4px;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 0.95rem;
+  line-height: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mesa-vital-life {
+  border-color: color-mix(in srgb, var(--red), transparent 65%);
+  background: color-mix(in srgb, var(--red), transparent 92%);
+}
+
+.mesa-vital-life span,
+.mesa-vital-life strong {
+  color: color-mix(in srgb, var(--red), var(--text) 25%);
+}
+
+.mesa-vital-mana {
+  border-color: color-mix(in srgb, var(--blue), transparent 65%);
+  background: color-mix(in srgb, var(--blue), transparent 92%);
+}
+
+.mesa-vital-mana span,
+.mesa-vital-mana strong {
+  color: color-mix(in srgb, var(--blue), var(--text) 20%);
+}
+
+.mesa-attributes {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 5px;
+  padding: 0 12px 10px;
+}
+
+.mesa-attributes > div {
+  display: grid;
+  place-items: center;
+  gap: 2px;
+  padding: 6px 2px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--card-soft), transparent 42%);
+}
+
+.mesa-attributes span {
+  color: var(--muted-2);
+  font-size: 0.58rem;
+  font-weight: 800;
+}
+
+.mesa-attributes strong {
+  color: var(--text);
+  font-size: 0.83rem;
+}
+
+.mesa-quick-section {
+  padding: 9px 12px;
+  border-top: 1px solid var(--line-soft);
+}
+
+.mesa-section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 7px;
+}
+
+.mesa-section-heading > span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.mesa-section-heading small {
+  min-width: 22px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: var(--card-soft);
+  color: var(--muted-2);
+  font-size: 0.64rem;
+  text-align: center;
+}
+
+.mesa-skill-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(74px, 1fr));
+  gap: 5px;
+}
+
+.mesa-skill-strip > div {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 6px 7px;
+  border: 1px solid var(--line-soft);
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--card-soft), transparent 45%);
+}
+
+.mesa-skill-strip span {
+  overflow: hidden;
+  color: var(--muted-2);
+  font-size: 0.64rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mesa-skill-strip strong {
+  color: var(--text);
+  font-size: 0.72rem;
+}
+
+.mesa-attack-list {
+  display: grid;
+  gap: 5px;
+}
+
+.mesa-attack-row {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 8px;
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--card-soft), transparent 52%);
+}
+
+.mesa-attack-row strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 0.72rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mesa-attack-row span {
+  flex: 0 0 auto;
+  color: var(--muted-2);
+  font-size: 0.68rem;
+}
+
+.mesa-empty-inline {
+  margin: 0;
+  color: var(--muted-2);
+  font-size: 0.72rem;
+}
+
+.mesa-character-details {
+  border-top: 1px solid var(--line-soft);
+}
+
+.mesa-character-details > summary {
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 12px;
+  color: var(--gold-strong);
+  font-size: 0.72rem;
+  font-weight: 800;
+  cursor: pointer;
+  list-style: none;
+}
+
+.mesa-character-details > summary::-webkit-details-marker {
+  display: none;
+}
+
+.mesa-character-details > summary::after {
+  content: "+";
+  margin-left: auto;
+  color: var(--muted-2);
+  font-size: 1rem;
+}
+
+.mesa-character-details[open] > summary::after {
+  content: "−";
+}
+
+.mesa-character-details[open] > summary {
+  border-bottom: 1px solid var(--line-soft);
+  background: var(--card-soft);
+}
+
+.mesa-detail-sections {
+  display: grid;
+  gap: 0;
+}
+
+.mesa-detail-sections > section {
+  padding: 11px 12px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.mesa-detail-sections > section:last-child {
+  border-bottom: 0;
+}
+
+.mesa-detail-sections h3 {
+  margin: 0 0 8px;
+  color: var(--text);
+  font-size: 0.76rem;
+}
+
+.mesa-detail-grid,
+.mesa-skills-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 5px;
+}
+
+.mesa-detail-grid p,
+.mesa-skills-grid p {
+  min-width: 0;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 7px;
+  padding: 5px 7px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--card-soft), transparent 46%);
+}
+
+.mesa-detail-grid span,
+.mesa-skills-grid span {
+  overflow: hidden;
+  color: var(--muted-2);
+  font-size: 0.65rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mesa-detail-grid strong,
+.mesa-skills-grid strong {
+  color: var(--text);
+  font-size: 0.68rem;
+}
+
+.mesa-skills-grid p.trained {
+  outline: 1px solid color-mix(in srgb, var(--gold), transparent 72%);
+  background: color-mix(in srgb, var(--gold), transparent 93%);
+}
+
+.mesa-detail-list,
+.mesa-text-list {
+  display: grid;
+  gap: 5px;
+}
+
+.mesa-detail-list p,
+.mesa-text-list > div {
+  margin: 0;
+  padding: 7px 8px;
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--card-soft), transparent 46%);
+}
+
+.mesa-detail-list p {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.mesa-detail-list strong,
+.mesa-text-list strong {
+  color: var(--text);
+  font-size: 0.69rem;
+}
+
+.mesa-detail-list span,
+.mesa-text-list p {
+  margin: 2px 0 0;
+  color: var(--muted-2);
+  font-size: 0.65rem;
+}
+
+.mesa-chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.mesa-chip-list span {
+  padding: 5px 7px;
+  border: 1px solid var(--line-soft);
+  border-radius: 999px;
+  background: var(--card-soft);
+  color: var(--muted);
+  font-size: 0.66rem;
+}
+
+.mesa-empty-state {
+  min-height: 470px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  padding: 36px;
+  text-align: center;
+}
+
+.mesa-empty-icon {
+  width: 68px;
+  height: 68px;
+  display: grid;
+  place-items: center;
+  margin-bottom: 10px;
+  border: 1px solid color-mix(in srgb, var(--gold), transparent 55%);
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--gold), transparent 92%);
+  color: var(--gold-strong);
+}
+
+.mesa-empty-state h2 {
+  margin: 0;
+  color: var(--text);
+  font-size: 1.05rem;
+}
+
+.mesa-empty-state > p {
+  max-width: 560px;
+  margin: 7px 0 15px;
+  color: var(--muted-2);
+  font-size: 0.82rem;
+}
+
+.mesa-empty-hints {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 7px;
+}
+
+.mesa-empty-hints > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  border: 1px solid var(--line-soft);
+  border-radius: 999px;
+  background: var(--card-soft);
+  color: var(--muted);
+  font-size: 0.68rem;
+}
+
+.mesa-hint-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--muted-2);
+}
+
+.mesa-hint-dot.life { background: var(--red); }
+.mesa-hint-dot.defense { background: var(--gold-strong); }
+
+.mesa-character-loading {
+  padding-bottom: 14px;
+}
+
+.mesa-skeleton-line,
+.mesa-skeleton-grid span {
+  background: linear-gradient(90deg, var(--card-soft), var(--surface-raised), var(--card-soft));
+  background-size: 200% 100%;
+  animation: mesa-pulse 1.2s ease-in-out infinite;
+}
+
+.mesa-skeleton-line {
+  width: 62%;
+  height: 12px;
+  margin: 12px 14px 0;
+  border-radius: 999px;
+}
+
+.mesa-skeleton-line.wide { width: calc(100% - 28px); height: 52px; }
+.mesa-skeleton-line.short { width: 42%; }
+
+.mesa-skeleton-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 7px;
+  margin: 9px 14px 0;
+}
+
+.mesa-skeleton-grid span {
+  height: 48px;
+  border-radius: 8px;
+}
+
+@keyframes mesa-pulse {
+  0% { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
+}
+
+@media (max-width: 1100px) {
+  .mesa-layout {
+    grid-template-columns: 260px minmax(0, 1fr);
+  }
+
+  .mesa-character-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 820px) {
+  .mesa-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .mesa-catalog {
+    position: static;
+    max-height: none;
+  }
+
+  .mesa-catalog-list {
+    max-height: 330px;
+  }
+
+  .mesa-workspace {
+    min-height: 460px;
+  }
+}
+
+@media (max-width: 560px) {
+  .mesa-workspace {
+    padding: 12px;
+  }
+
+  .mesa-workspace-header {
+    display: grid;
+  }
+
+  .mesa-clear-button {
+    width: 100%;
+  }
+
+  .mesa-vitals {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .mesa-attributes {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .mesa-detail-grid,
+  .mesa-skills-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .mesa-detail-list p {
+    display: grid;
+  }
+}

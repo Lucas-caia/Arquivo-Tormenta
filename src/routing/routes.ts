@@ -4,11 +4,12 @@ import {
   Github,
   GitPullRequest,
   LayoutDashboard,
+  LayoutGrid,
   Settings,
   Upload
 } from "lucide-react";
 
-export type AppRoute = "dashboard" | "fichas" | "upload" | "revisoes" | "github" | "configuracoes";
+export type AppRoute = "dashboard" | "fichas" | "mesa" | "upload" | "revisoes" | "github" | "configuracoes";
 
 export type RouteDefinition = {
   id: AppRoute;
@@ -34,6 +35,14 @@ export const routes: RouteDefinition[] = [
     title: "Fichas de personagens",
     description: "Consulte e gerencie todas as fichas armazenadas.",
     icon: FileText,
+    group: "principal"
+  },
+  {
+    id: "mesa",
+    label: "Mesa",
+    title: "Mesa do mestre",
+    description: "Reúna fichas temporariamente para consulta rápida durante a sessão.",
+    icon: LayoutGrid,
     group: "principal"
   },
   {

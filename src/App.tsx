@@ -4,16 +4,19 @@ import { FichaDetailModal } from "./components/fichas/FichaDetailModal";
 import { ComparisonModal } from "./components/revisoes/ComparisonModal";
 import { Toast } from "./components/common/Toast";
 import { useArquivoTormenta } from "./hooks/useArquivoTormenta";
+import { useMesa } from "./hooks/useMesa";
 import { DashboardPage } from "./pages/DashboardPage";
 import { FichasPage } from "./pages/FichasPage";
 import { GitHubPage } from "./pages/GitHubPage";
 import { LoadingPage } from "./pages/LoadingPage";
+import { MesaPage } from "./pages/MesaPage";
 import { RevisoesPage } from "./pages/RevisoesPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { UploadPage } from "./pages/UploadPage";
-import { getRouteDefinition } from "./routing/routes";
+import { getRouteDefinition, routeHref } from "./routing/routes";
 import { useHashRoute } from "./routing/useHashRoute";
 import { useAccessibilitySettings } from "./settings/useAccessibilitySettings";
+
 export default function App() {
   function skipToContent(event: MouseEvent<HTMLAnchorElement>) {
     event.preventDefault();
@@ -25,9 +28,16 @@ export default function App() {
   const [query, setQuery] = useState("");
   const accessibility = useAccessibilitySettings();
   const arquivo = useArquivoTormenta();
+
+  // A mesa vive somente na memória desta execução da SPA. Assim, navegar para
+  // outras áreas não desmonta a seleção, mas recarregar/fechar a aplicação limpa tudo.
+  const mesa = useMesa();
+
   const showSearch = route === "dashboard" || route === "fichas" || route === "revisoes";
+
   function renderPage() {
     if (arquivo.loading) return <LoadingPage />;
+
     switch (route) {
       case "fichas":
         return (
@@ -37,6 +47,14 @@ export default function App() {
             onView={arquivo.handleView}
             onCompare={arquivo.handleCompare}
             onApprove={arquivo.handleApprove}
+          />
+        );
+      case "mesa":
+        return (
+          <MesaPage
+            fichas={arquivo.fichas}
+            mesa={mesa}
+            onView={arquivo.handleView}
           />
         );
       case "upload":
@@ -55,10 +73,17 @@ export default function App() {
         return (
           <GitHubPage
             status={arquivo.git}
+            settings={arquivo.gitConfig}
+            branches={arquivo.gitBranches}
+            preview={arquivo.gitPreview}
             busy={arquivo.gitBusy}
             onRefresh={arquivo.handleRefreshGit}
+            onSave={arquivo.handleSaveGitSettings}
+            onVerify={arquivo.handleVerifyGit}
             onPull={arquivo.handlePull}
-            onPush={arquivo.handlePush}
+            onPreparePush={arquivo.handlePreparePush}
+            onConfirmPush={arquivo.handleConfirmPush}
+            onCancelPush={arquivo.handleCancelPush}
           />
         );
       case "configuracoes":
@@ -85,11 +110,14 @@ export default function App() {
             onApproveAll={arquivo.handleApproveAll}
             onRefreshGit={arquivo.handleRefreshGit}
             onPull={arquivo.handlePull}
-            onPush={arquivo.handlePush}
+            onOpenGitHub={() => {
+              window.location.hash = routeHref("github");
+            }}
           />
         );
     }
   }
+
   return (
     <>
       <a className="skip-link" href="#conteudo-principal" onClick={skipToContent}>Pular para o conteúdo</a>
