@@ -7,8 +7,8 @@
   "classe": "Burguês (Nobre)",
   "nivel": "1",
   "divindade": "",
-  "status": "em-revisao",
-  "atualizadoEm": "2026-08-08T22:02:53.493Z",
+  "status": "aprovado",
+  "atualizadoEm": "2026-08-16T17:18:23.399Z",
   "temRevisao": false,
   "atributos": {
     "força": "0",
@@ -351,7 +351,7 @@
   "magias": [],
   "historico": {
     "criadoEm": "2026-08-08T22:02:53.493Z",
-    "atualizadoEm": "2026-08-08T22:02:53.493Z",
+    "atualizadoEm": "2026-08-16T17:18:23.399Z",
     "versao": 1
   },
   "camposOriginais": {

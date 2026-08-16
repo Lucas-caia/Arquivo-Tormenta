@@ -51,6 +51,10 @@ export function GitHubPage({
     setDraft(settings);
   }, [settings]);
 
+  useEffect(() => () => {
+    onCancelPush();
+  }, [onCancelPush]);
+
   if (!draft) {
     return (
       <section className="wide-card empty-state">
@@ -230,7 +234,7 @@ export function GitHubPage({
               <Download size={14} aria-hidden="true" /> Pull seguro
             </button>
             <button className="button primary" disabled={busy || !canSync} onClick={onPreparePush}>
-              <Send size={14} aria-hidden="true" /> Preparar Push
+              <Send size={14} aria-hidden="true" /> {preview ? "Atualizar prévia" : "Preparar Push"}
             </button>
           </div>
           <p className="info-line">

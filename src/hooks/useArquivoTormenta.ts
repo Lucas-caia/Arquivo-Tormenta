@@ -67,6 +67,9 @@ export function useArquivoTormenta() {
     const result = await listarFichas();
     setFichas(result.fichas);
     setStats(result.estatisticas);
+    // Uma prévia representa um snapshot do acervo. Qualquer atualização local
+    // invalida esse snapshot para não exibir um Push antigo como se fosse atual.
+    setGitPreview(null);
   }, []);
 
   const refreshGit = useCallback(async () => {

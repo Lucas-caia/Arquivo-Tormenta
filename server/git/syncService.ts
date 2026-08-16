@@ -170,19 +170,32 @@ async function copyRepoScopesIntoLocal(settings: GitSettingsInternal) {
   }
 }
 
-async function workingTreeChanges(settings: GitSettingsInternal): Promise<PreparedGitChange[]> {
+async function stageSelectedScopes(settings: GitSettingsInternal) {
   const paths = selectedPaths(settings);
-  const output = await runGit(["status", "--porcelain=v1", "--", ...paths], { cwd: syncRepo });
+  // -A inclui adições, alterações e remoções. -f evita que uma regra de ignore
+  // local/global esconda uma ficha que faz parte explicitamente do escopo de sync.
+  await runGit(["add", "-A", "-f", "--", ...paths], { cwd: syncRepo });
+}
+
+async function stagedChanges(settings: GitSettingsInternal): Promise<PreparedGitChange[]> {
+  const paths = selectedPaths(settings);
+  const output = await runGit(
+    ["diff", "--cached", "--name-status", "--no-renames", "--", ...paths],
+    { cwd: syncRepo }
+  );
+
   return output
     .split("\n")
-    .map((line) => line.trimEnd())
+    .map((line) => line.trim())
     .filter(Boolean)
     .map((line) => {
-      const status = line.slice(0, 2).trim() || "??";
-      const rawPath = line.slice(3).trim();
-      const resolvedPath = rawPath.includes(" -> ") ? rawPath.split(" -> ").pop()! : rawPath;
-      return { status, path: resolvedPath.replace(/\\/g, "/") };
-    });
+      const [status = "M", ...pathParts] = line.split("\t");
+      return {
+        status: status.trim(),
+        path: pathParts.join("\t").trim().replace(/\\/g, "/")
+      };
+    })
+    .filter((change) => Boolean(change.path));
 }
 
 async function resetWorkingTree() {
@@ -194,7 +207,8 @@ async function preparePushInternal(settings: GitSettingsInternal, env: NodeJS.Pr
   await initializeRepository(settings, env);
   const baseline = await runGit(["rev-parse", "HEAD"], { cwd: syncRepo });
   await copyLocalScopesIntoRepo(settings);
-  const changes = await workingTreeChanges(settings);
+  await stageSelectedScopes(settings);
+  const changes = await stagedChanges(settings);
   await fetchTargetBranch(settings, env);
   const remoteHead = await runGit(["rev-parse", remoteTrackingRef], { cwd: syncRepo });
 
@@ -212,8 +226,6 @@ async function preparePushInternal(settings: GitSettingsInternal, env: NodeJS.Pr
     return buildGitPreview(settings, [], dataRoot);
   }
 
-  const paths = selectedPaths(settings);
-  await runGit(["add", "--", ...paths], { cwd: syncRepo });
   const preview = await buildGitPreview(settings, changes, dataRoot);
   if (!keepPrepared) await resetWorkingTree();
   return preview;
@@ -360,7 +372,8 @@ export async function pullRepository(): Promise<GitActionResponse> {
     await initializeRepository(settings, env);
     const baseline = await runGit(["rev-parse", "HEAD"], { cwd: syncRepo });
     await copyLocalScopesIntoRepo(settings);
-    const localChanges = await workingTreeChanges(settings);
+    await stageSelectedScopes(settings);
+    const localChanges = await stagedChanges(settings);
     await resetWorkingTree();
 
     if (localChanges.length) {
