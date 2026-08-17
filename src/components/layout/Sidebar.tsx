@@ -52,13 +52,6 @@ export function Sidebar({ activeRoute }: SidebarProps) {
         <NavigationGroup title="Sistema" group="sistema" activeRoute={activeRoute} />
       </nav>
 
-      <div className="private-mode-card">
-        <span className="private-mode-dot" aria-hidden="true" />
-        <div>
-          <strong>Modo privado</strong>
-          <small>Sem contas ou cadastro</small>
-        </div>
-      </div>
     </aside>
   );
 }

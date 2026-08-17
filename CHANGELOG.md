@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.0.0
+
+- Sistema de Mesas, permitindo reunir temporariamente várias fichas em uma única área para consulta durante a sessão.
+- Melhorias na sincronização GitHub para detectar corretamente fichas novas, alteradas e removidas.
+
 ## 1.2.1
 
 - Opção de deixar o site em preto e branco

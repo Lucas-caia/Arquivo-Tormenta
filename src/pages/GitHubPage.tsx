@@ -235,7 +235,7 @@ export function GitHubPage({
           </div>
           <p className="info-line">
             <LockKeyhole size={14} aria-hidden="true" />
-            O Pull é bloqueado quando existem alterações locais não sincronizadas. O Push exige uma prévia antes da confirmação.
+            O Pull preserva alterações locais quando não existe conflito no mesmo arquivo. O Push exige uma prévia antes da confirmação.
           </p>
         </section>
 

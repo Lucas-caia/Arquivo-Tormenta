@@ -48,7 +48,8 @@ function presetTemplates(settings: GitSettingsInternal) {
 export async function buildGitPreview(
   settings: GitSettingsInternal,
   changes: PreparedGitChange[],
-  dataRoot: string
+  dataRoot: string,
+  fingerprintContext = ""
 ): Promise<GitPreview> {
   const fichaChanges = changes.filter((change) => change.path.startsWith("data/fichas/") && change.path.endsWith(".json"));
   const newFichas = fichaChanges.filter((change) => change.status.startsWith("A") || change.status === "??");
@@ -85,7 +86,8 @@ export async function buildGitPreview(
       remoteUrl: settings.remoteUrl,
       escopos: settings.escopos,
       changes,
-      message
+      message,
+      fingerprintContext
     }))
     .digest("hex");
 

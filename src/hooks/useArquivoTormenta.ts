@@ -14,6 +14,7 @@ import {
   aplicarRevisao,
   aprovarTodas,
   atualizarStatus,
+  deletarFicha,
   descartarRevisao,
   enviarPdf,
   gitPreviewPush,
@@ -67,6 +68,9 @@ export function useArquivoTormenta() {
     const result = await listarFichas();
     setFichas(result.fichas);
     setStats(result.estatisticas);
+    // Uma prévia representa um snapshot do acervo. Qualquer atualização local
+    // invalida esse snapshot para não exibir um Push antigo como se fosse atual.
+    setGitPreview(null);
   }, []);
 
   const refreshGit = useCallback(async () => {
@@ -154,6 +158,36 @@ export function useArquivoTormenta() {
       setActionBusy(false);
     }
   }, [refreshFichas]);
+
+  const handleDelete = useCallback(async (ficha: FichaResumo) => {
+    const revisionWarning = ficha.temRevisao
+      ? " A revisão pendente desta ficha também será removida."
+      : "";
+    const confirmed = window.confirm(
+      `Excluir permanentemente a ficha ${ficha.nome}?${revisionWarning} Esta ação não pode ser desfeita.`
+    );
+    if (!confirmed) return false;
+
+    setActionBusy(true);
+    try {
+      const result = await deletarFicha(ficha.id);
+      if (detail?.id === ficha.id) setDetail(null);
+      if (revisao?.fichaId === ficha.id) setRevisao(null);
+      await refreshFichas();
+      setToast({
+        text: result.revisaoRemovida
+          ? `Ficha ${ficha.nome} e sua revisão pendente foram excluídas.`
+          : `Ficha ${ficha.nome} excluída.`,
+        type: "ok"
+      });
+      return true;
+    } catch (error) {
+      setToast(errorMessage(error, "Não foi possível excluir a ficha."));
+      return false;
+    } finally {
+      setActionBusy(false);
+    }
+  }, [detail, refreshFichas, revisao]);
 
   const handleApplyRevision = useCallback(async (status: StatusFicha) => {
     if (!revisao) return;
@@ -271,7 +305,7 @@ export function useArquivoTormenta() {
 
   const handlePull = useCallback(async () => {
     const confirmed = window.confirm(
-      "O Pull só será executado se não houver alterações locais pendentes nos grupos selecionados. Deseja continuar?"
+      "O Pull compara o acervo local com o GitHub e só aplica mudanças quando puder preservar seus arquivos. Deseja continuar?"
     );
     if (!confirmed) return;
 
@@ -321,6 +355,7 @@ export function useArquivoTormenta() {
     handleView,
     handleCompare,
     handleApprove,
+    handleDelete,
     handleApplyRevision,
     handleDiscardRevision,
     handleApproveAll,

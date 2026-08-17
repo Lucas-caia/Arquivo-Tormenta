@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { CheckCircle, Eye, GitCompare, Search } from "lucide-react";
+import { CheckCircle, Eye, GitCompare, Search, Trash2 } from "lucide-react";
 import type { FichaResumo, StatusFicha } from "../../../shared/types";
 import { formatDate } from "../../utils/format";
 import { StatusBadge } from "../common/StatusBadge";
@@ -15,6 +15,7 @@ export type FichaTableProps = {
   onView: (id: string) => void;
   onCompare: (id: string) => void;
   onApprove: (id: string) => void;
+  onDelete?: (ficha: FichaResumo) => void;
 };
 
 export function FichaTable({
@@ -26,7 +27,8 @@ export function FichaTable({
   showStatusFilters = true,
   onView,
   onCompare,
-  onApprove
+  onApprove,
+  onDelete
 }: FichaTableProps) {
   const [statusFilter, setStatusFilter] = useState<"todas" | StatusFicha>(initialStatus);
   const [localSearch, setLocalSearch] = useState("");
@@ -125,6 +127,16 @@ export function FichaTable({
                     >
                       <CheckCircle size={15} aria-hidden="true" />
                     </button>
+                    {onDelete ? (
+                      <button
+                        className="danger-action"
+                        aria-label={`Excluir ficha de ${ficha.nome}`}
+                        title="Excluir ficha"
+                        onClick={() => onDelete(ficha)}
+                      >
+                        <Trash2 size={15} aria-hidden="true" />
+                      </button>
+                    ) : null}
                   </div>
                 </td>
               </tr>
