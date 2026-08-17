@@ -73,6 +73,12 @@ export function obterFicha(id: string) {
   return request<Ficha>(`/api/fichas/${encodeURIComponent(id)}`);
 }
 
+export function deletarFicha(id: string) {
+  return request<{ sucesso: true; revisaoRemovida: boolean }>(`/api/fichas/${encodeURIComponent(id)}`, {
+    method: "DELETE"
+  });
+}
+
 export function enviarPdf(file: File) {
   const data = new FormData();
   data.append("pdf", file);

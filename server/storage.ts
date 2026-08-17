@@ -167,6 +167,26 @@ export async function saveFicha(ficha: Ficha) {
   return ficha;
 }
 
+export async function deleteFicha(id: string) {
+  return withFichaLock(id, async () => {
+    await ensureDirectories();
+    const fichaFile = fichaPath(id);
+    if (!(await exists(fichaFile))) {
+      throw notFound("FICHA_NOT_FOUND", "Ficha não encontrada.");
+    }
+
+    const revisionFile = revisaoPath(id);
+    const revisaoRemovida = await exists(revisionFile);
+
+    // A revisão pertence à ficha oficial. Removê-la junto evita deixar uma
+    // pendência órfã que não poderia mais ser aplicada ou comparada.
+    if (revisaoRemovida) await fs.unlink(revisionFile);
+    await fs.unlink(fichaFile);
+
+    return { sucesso: true as const, revisaoRemovida };
+  });
+}
+
 export async function listStoredFichas() {
   const ids = await listFichaIds();
   const fichas = await Promise.all(ids.map((id) => readFicha(id)));

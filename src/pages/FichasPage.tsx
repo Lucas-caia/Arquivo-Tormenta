@@ -6,13 +6,15 @@ export function FichasPage({
   query,
   onView,
   onCompare,
-  onApprove
+  onApprove,
+  onDelete
 }: {
   fichas: FichaResumo[];
   query: string;
   onView: (id: string) => void;
   onCompare: (id: string) => void;
   onApprove: (id: string) => void;
+  onDelete: (ficha: FichaResumo) => void;
 }) {
   return (
     <FichaTable
@@ -21,6 +23,7 @@ export function FichasPage({
       onView={onView}
       onCompare={onCompare}
       onApprove={onApprove}
+      onDelete={onDelete}
     />
   );
 }

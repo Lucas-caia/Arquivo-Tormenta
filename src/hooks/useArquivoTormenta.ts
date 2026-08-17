@@ -14,6 +14,7 @@ import {
   aplicarRevisao,
   aprovarTodas,
   atualizarStatus,
+  deletarFicha,
   descartarRevisao,
   enviarPdf,
   gitPreviewPush,
@@ -157,6 +158,36 @@ export function useArquivoTormenta() {
       setActionBusy(false);
     }
   }, [refreshFichas]);
+
+  const handleDelete = useCallback(async (ficha: FichaResumo) => {
+    const revisionWarning = ficha.temRevisao
+      ? " A revisão pendente desta ficha também será removida."
+      : "";
+    const confirmed = window.confirm(
+      `Excluir permanentemente a ficha ${ficha.nome}?${revisionWarning} Esta ação não pode ser desfeita.`
+    );
+    if (!confirmed) return false;
+
+    setActionBusy(true);
+    try {
+      const result = await deletarFicha(ficha.id);
+      if (detail?.id === ficha.id) setDetail(null);
+      if (revisao?.fichaId === ficha.id) setRevisao(null);
+      await refreshFichas();
+      setToast({
+        text: result.revisaoRemovida
+          ? `Ficha ${ficha.nome} e sua revisão pendente foram excluídas.`
+          : `Ficha ${ficha.nome} excluída.`,
+        type: "ok"
+      });
+      return true;
+    } catch (error) {
+      setToast(errorMessage(error, "Não foi possível excluir a ficha."));
+      return false;
+    } finally {
+      setActionBusy(false);
+    }
+  }, [detail, refreshFichas, revisao]);
 
   const handleApplyRevision = useCallback(async (status: StatusFicha) => {
     if (!revisao) return;
@@ -324,6 +355,7 @@ export function useArquivoTormenta() {
     handleView,
     handleCompare,
     handleApprove,
+    handleDelete,
     handleApplyRevision,
     handleDiscardRevision,
     handleApproveAll,

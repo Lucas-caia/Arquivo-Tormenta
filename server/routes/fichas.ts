@@ -5,6 +5,7 @@ import { asyncHandler } from "../middleware/asyncHandler.js";
 import { uploadPdf } from "../middleware/upload.js";
 import {
   approveAllReview,
+  deleteFicha,
   listFichas,
   readFicha,
   summarizeFichas,
@@ -43,6 +44,11 @@ fichasRouter.get("/:id", asyncHandler(async (request, response) => {
   const ficha = await readFicha(id);
   if (!ficha) throw notFound("FICHA_NOT_FOUND", "Ficha não encontrada.");
   response.json(ficha);
+}));
+
+fichasRouter.delete("/:id", asyncHandler(async (request, response) => {
+  const id = assertValidFichaId(request.params.id);
+  response.json(await deleteFicha(id));
 }));
 
 fichasRouter.post("/:id/status", asyncHandler(async (request, response) => {

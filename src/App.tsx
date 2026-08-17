@@ -47,6 +47,10 @@ export default function App() {
             onView={arquivo.handleView}
             onCompare={arquivo.handleCompare}
             onApprove={arquivo.handleApprove}
+            onDelete={async (ficha) => {
+              const deleted = await arquivo.handleDelete(ficha);
+              if (deleted) mesa.removeFicha(ficha.id);
+            }}
           />
         );
       case "mesa":
@@ -129,7 +133,7 @@ export default function App() {
         showSearch={showSearch}
         footer={(
           <>
-            <span>Arquivo Tormenta RPG · 2.0.0 · modo privado</span>
+            <span>Arquivo Tormenta RPG · v2.0.0 · modo privado</span>
             <span>/data/fichas · {arquivo.stats.total} ficha(s)</span>
           </>
         )}
